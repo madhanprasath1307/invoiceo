@@ -4,7 +4,8 @@
 //   flutter test tool/screenshots/marketing_screenshots_test.dart
 // Output: ../invoiceo-website/assets/images/screens/*.png (override with
 // --dart-define=SCREENS_OUT=/some/folder). For the Tamil page add
-// --dart-define=SHOT_LOCALE=ta, which writes *-ta.png with the app in Tamil.
+// --dart-define=SHOT_LOCALE=ta, which writes *-ta.png with the app in Tamil
+// (SHOT_LOCALE=hi: *-hi.png, the app in Hindi).
 // --dart-define=SHOT_SETTINGS=true also writes settings-01.png ... (every
 // Settings section, 1366 px wide and tall) for checking labels; those are not
 // for the website, so give them their own SCREENS_OUT.
@@ -87,6 +88,9 @@ void main() {
     ]);
     await _loadFont('MaterialIcons', ['MaterialIcons-Regular.otf']);
     await _loadFont('NotoSansTamil', ['NotoSansTamil-Regular.ttf', 'NotoSansTamil-Bold.ttf'],
+        dir: 'assets/fonts');
+    await _loadFont('NotoSansDevanagari',
+        ['NotoSansDevanagari-Regular.ttf', 'NotoSansDevanagari-Bold.ttf'],
         dir: 'assets/fonts');
     // The greeting's wave; a test has no system fonts to fall back on.
     final emoji = File('/System/Library/Fonts/Apple Color Emoji.ttc');
@@ -271,7 +275,7 @@ void main() {
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light.copyWith(
               textTheme: AppTheme.light.textTheme
-                  .apply(fontFamilyFallback: const ['NotoSansTamil', 'ShotEmoji'])),
+                  .apply(fontFamilyFallback: const ['NotoSansTamil', 'NotoSansDevanagari', 'ShotEmoji'])),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: _locale == '' ? null : Locale(_locale),
