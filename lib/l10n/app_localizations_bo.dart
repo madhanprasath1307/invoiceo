@@ -591,6 +591,13 @@ class AppLocalizationsBo extends AppLocalizations {
   String get mProdLowStockSub => 'Products need attention';
 
   @override
+  String get mProdTrackStockTitle => 'Track stock for this product';
+
+  @override
+  String get mProdTrackStockSubtitle =>
+      'Manage inventory and get low stock alerts';
+
+  @override
   String get mProdOutOfStockSub => 'Not available';
 
   @override
@@ -2714,6 +2721,17 @@ class AppLocalizationsBo extends AppLocalizations {
 
   @override
   String get productMgmtCsvDescNotes => 'ཡིག་ཟིན་ཐོར་བུ།';
+
+  @override
+  String get productMgmtCsvDescLowStockLimit =>
+      'ཐོན་རྫས་འདིའི་ཚོང་ཟོག་ཉུང་བའི་ཚད། སྟོང་པ = སྔོན་སྒྲིག 10';
+
+  @override
+  String get productMgmtLowStockLimitLabel => 'ཚོང་ཟོག་ཉུང་བའི་ཚད།';
+
+  @override
+  String get productMgmtLowStockLimitHelper =>
+      'ཚོང་ཟོག་གྲངས་འདི་དང་མཉམ་པའམ་དེ་ལས་ཉུང་ན་ཚོང་ཟོག་ཉུང་བའི་ནང་མངོན། སྔོན་སྒྲིག (10) ཆེད་སྟོང་པ་བཞག';
 
   @override
   String get productMgmtCsvDuplicateNote =>

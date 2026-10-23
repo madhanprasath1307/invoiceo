@@ -83,6 +83,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
   final _priceController = TextEditingController();
   final _purchasePriceController = TextEditingController();
   final _stockController = TextEditingController(text: '0');
+  final _lowStockLimitController = TextEditingController();
   final _hsnCodeController = TextEditingController();
   final _taxRateController = TextEditingController();
   final _customUnitController = TextEditingController();
@@ -151,6 +152,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
     'supplier_name',
     'sku_code',
     'notes',
+    'low_stock_limit',
   ];
 
   // The CSV columns stored in product_metadata (not on the product row).
@@ -430,6 +432,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
     _purchasePriceController.dispose();
     _defaultDiscountController.dispose();
     _stockController.dispose();
+    _lowStockLimitController.dispose();
     _taxRateController.dispose();
     _hsnCodeController.dispose();
     _customUnitController.dispose();
@@ -531,6 +534,9 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
         unit: _selectedUnit.trim(),
         unlimitedStock: _unlimitedStock,
         priceIncludesTax: _priceIncludesTax,
+        lowStockLimit: _unlimitedStock
+            ? null
+            : int.tryParse(_lowStockLimitController.text.trim()),
       );
 
       await ref.read(productRepositoryProvider).insertProduct(newProduct);
@@ -567,6 +573,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
     _purchasePriceController.clear();
     _defaultDiscountController.clear();
     _stockController.clear();
+    _lowStockLimitController.clear();
     _hsnCodeController.clear();
     _taxRateController.clear();
     _taxRateController.text = "18";
@@ -772,6 +779,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
     TextInputType? keyboardType,
     bool isPrice = false,
     bool isStock = false,
+    bool isCount = false,
     bool isTaxRate = false,
     bool isRequired = false,
     String? prefixText,
@@ -786,7 +794,9 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
       maxLength: maxLength,
       keyboardType: keyboardType,
       onFieldSubmitted: onSubmitted == null ? null : (_) => onSubmitted(),
-      inputFormatters: isPrice
+      inputFormatters: isCount
+          ? [FilteringTextInputFormatter.digitsOnly]
+          : isPrice
           ? [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}$'))]
           : isStock
               // Stock can be a decimal (12.5 kg).
@@ -971,6 +981,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
                     _csvRuleRow(context, 'supplier_name', false, l10n.productMgmtCsvDescSupplierName),
                     _csvRuleRow(context, 'sku_code', false, l10n.productMgmtCsvDescSkuCode),
                     _csvRuleRow(context, 'notes', false, l10n.productMgmtCsvDescNotes),
+                    _csvRuleRow(context, 'low_stock_limit', false, l10n.productMgmtCsvDescLowStockLimit),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -1193,6 +1204,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
         final unitStr = getField(row, 'unit');
         final unlimitedStockStr = getField(row, 'unlimited_stock');
         final priceIncludesTaxStr = getField(row, 'price_includes_tax');
+        final lowStockLimitStr = getField(row, 'low_stock_limit');
         // "18.0" / "10.0" (as Excel and Sheets write them) read as 18 / 10.
         int wholeNumber(String v) =>
             int.tryParse(v.trim()) ?? double.tryParse(v.trim())?.round() ?? 0;
@@ -1240,6 +1252,11 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
           unlimitedStock: keep('unlimited_stock') ? existing!.unlimitedStock : unlimitedStock,
           priceIncludesTax:
               keep('price_includes_tax') ? existing!.priceIncludesTax : priceIncludesTax,
+          // Blank or not a number keeps the saved limit (or the default).
+          lowStockLimit: keep('low_stock_limit')
+              ? existing!.lowStockLimit
+              : (int.tryParse(lowStockLimitStr.trim()) ?? existing?.lowStockLimit)
+                  ?.clamp(0, 1000000),
         );
 
         // The saved details (batch, expiry...) only when a column is missing.
@@ -1515,7 +1532,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
       final allProducts = _ofThisKind(await repo.getAllProducts());
       final allMetadata = await repo.getAllProductMetadata();
       final List<List<dynamic>> rows = [
-        ['name', 'hsn_code', 'description', 'price', 'tax_rate', 'stock', 'type', 'default_discount', 'purchase_price', 'alias_name', 'unit', 'unlimited_stock', 'price_includes_tax', 'storage_location', 'container_number', 'batch_number', 'expiry_date', 'manufacture_date', 'manufacture_name', 'supplier_name', 'sku_code', 'notes'],
+        ['name', 'hsn_code', 'description', 'price', 'tax_rate', 'stock', 'type', 'default_discount', 'purchase_price', 'alias_name', 'unit', 'unlimited_stock', 'price_includes_tax', 'storage_location', 'container_number', 'batch_number', 'expiry_date', 'manufacture_date', 'manufacture_name', 'supplier_name', 'sku_code', 'notes', 'low_stock_limit'],
         ...allProducts.map((p) {
           final meta = allMetadata[p.id];
           return [
@@ -1541,6 +1558,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
               meta?.supplierName ?? '',
               meta?.skuCode ?? '',
               meta?.notes ?? '',
+              p.lowStockLimit ?? '',
             ];
         }),
       ];
@@ -2496,7 +2514,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
     if (p.unlimitedStock) {
       return const Text('∞');
     }
-    final color = p.stock > 10
+    final color = p.stock > p.effectiveLowStockLimit
         ? null
         : p.stock > 0
             ? Colors.orange[700]
@@ -2903,6 +2921,15 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
               title: Text(l10n.productMgmtUnlimitedStockLabel),
               subtitle: Text(l10n.productMgmtTrackInfiniteStockSubtitle),
             ),
+          if (_columnsConfig.stock && !_unlimitedStock) ...[
+            const SizedBox(height: 12),
+            _buildFormField(_lowStockLimitController,
+                l10n.productMgmtLowStockLimitLabel, Icons.notification_important_outlined,
+                keyboardType: TextInputType.number,
+                isCount: true,
+                required: false,
+                helperText: l10n.productMgmtLowStockLimitHelper),
+          ],
         ],
         if (_columnsConfig.productMetadata) ...[
           const SizedBox(height: 8),
@@ -2950,6 +2977,314 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
           ),
         ),
       ],
+    );
+  }
+
+  // ── Modern "Add New Product / Service" dialog ───────────────────────────
+  // The Modern layout's design: a centred dialog with a header, section bands
+  // (General / Pricing / Inventory), two-column rows and a footer. It uses the
+  // same controllers, form key and save as the Standard side panel.
+
+  Widget _bandModern(String text, {EdgeInsets margin = const EdgeInsets.only(top: 14, bottom: 10)}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: double.infinity,
+      margin: margin,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Theme.of(context).colorScheme.surfaceContainerHighest
+            : BrandColors.primarySoft,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.8,
+          color: isDark ? Theme.of(context).colorScheme.onSurfaceVariant : BrandColors.primaryDark,
+        ),
+      ),
+    );
+  }
+
+  /// Fields side by side, or one under another in a narrow window.
+  Widget _fieldsRowModern(List<Widget> fields) {
+    final narrow = MediaQuery.of(context).size.width < 760;
+    if (narrow) {
+      return Column(children: [
+        for (var i = 0; i < fields.length; i++) ...[
+          if (i > 0) const SizedBox(height: 14),
+          fields[i],
+        ],
+      ]);
+    }
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      for (var i = 0; i < fields.length; i++) ...[
+        if (i > 0) const SizedBox(width: 14),
+        Expanded(child: fields[i]),
+      ],
+    ]);
+  }
+
+  Widget _addDialogFormModern() {
+    final l10n = AppLocalizations.of(context)!;
+    final isService = _newItemType == 'service';
+    final tracked = _columnsConfig.stock && !_unlimitedStock;
+    final alias = _columnsConfig.aliasName
+        ? Tooltip(
+            message: l10n.productMgmtAliasHelperText,
+            child: _buildFormField(
+                _aliasNameController, l10n.productMgmtAliasNameLabel, Icons.translate,
+                maxLength: 100, required: false))
+        : null;
+    final hsn = _columnsConfig.hsncode
+        ? _buildFormField(_hsnCodeController, l10n.productMgmtHsnSacLabel, Icons.qr_code,
+            maxLength: 100, required: false)
+        : null;
+    final pairGeneral = [if (alias != null) alias, if (hsn != null) hsn];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _bandModern(l10n.productMgmtSectionGeneral, margin: const EdgeInsets.only(bottom: 12)),
+        _buildFormField(_nameController, l10n.fieldNameLabel, Icons.inventory_2,
+            maxLength: 100, onSubmitted: _addProductV2),
+        if (pairGeneral.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _fieldsRowModern(pairGeneral),
+        ],
+        if (_columnsConfig.description) ...[
+          const SizedBox(height: 12),
+          _buildFormField(
+              _descriptionController, l10n.productMgmtDescriptionLabel, Icons.description,
+              maxLines: 2, maxLength: 500, required: false),
+        ],
+        _bandModern(l10n.productMgmtSectionPricing),
+        _fieldsRowModern([
+          _buildFormField(_priceController, l10n.productMgmtSalePriceLabel, Icons.attach_money,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              isPrice: true,
+              prefixText: '$_currencySymbol ',
+              onSubmitted: _addProductV2),
+          if (_columnsConfig.purchasePrice)
+            _buildFormField(
+                _purchasePriceController, l10n.productMgmtPurchasePriceLabel, Icons.shopping_cart_outlined,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                isPrice: true,
+                required: !isService,
+                prefixText: '$_currencySymbol '),
+        ]),
+        if (_columnsConfig.defaultDiscount || _columnsConfig.taxRate) ...[
+          const SizedBox(height: 12),
+          _fieldsRowModern([
+            if (_columnsConfig.defaultDiscount)
+              _buildFormField(
+                  _defaultDiscountController, l10n.productMgmtDefaultDiscountLabel, Icons.discount,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  isPrice: true,
+                  required: false,
+                  prefixText: '$_currencySymbol '),
+            if (_columnsConfig.taxRate)
+              _buildFormField(_taxRateController, l10n.productMgmtTaxPercentLabel, Icons.percent,
+                  keyboardType: TextInputType.number, isTaxRate: true),
+          ]),
+        ],
+        if (_columnsConfig.taxRate)
+          Row(children: [
+            Checkbox(
+              value: _priceIncludesTax,
+              visualDensity: VisualDensity.compact,
+              onChanged: (v) {
+                if (!mounted) return;
+                setState(() => _priceIncludesTax = v ?? false);
+              },
+            ),
+            Text(l10n.fieldPriceIncludesTaxLabel,
+                style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(width: 6),
+            Tooltip(
+              message: l10n.productMgmtPerItemTaxModeOnlyLabel,
+              child: Icon(Icons.info_outline, size: 17, color: BrandColors.accent),
+            ),
+          ]),
+        if (_columnsConfig.stock || _columnsConfig.unit) ...[
+          _bandModern(l10n.productMgmtSectionInventory),
+          if (_columnsConfig.stock)
+            SwitchListTile(
+              key: const ValueKey('modernTrackStock'),
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: !_unlimitedStock,
+              onChanged: (v) {
+                if (!mounted) return;
+                setState(() => _unlimitedStock = !v);
+              },
+              title: Text(l10n.mProdTrackStockTitle,
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text(l10n.mProdTrackStockSubtitle),
+            ),
+          const SizedBox(height: 8),
+          _fieldsRowModern([
+            if (tracked)
+              _buildFormField(_stockController, l10n.labelStock, Icons.inventory,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  isStock: true),
+            if (tracked)
+              _buildFormField(_lowStockLimitController,
+                  l10n.productMgmtLowStockLimitLabel, Icons.notifications_none,
+                  keyboardType: TextInputType.number,
+                  isCount: true,
+                  required: false,
+                  helperText: l10n.productMgmtLowStockLimitHelper),
+            if (_columnsConfig.unit)
+              _buildUnitField(
+                selectedUnit: _selectedUnit,
+                customController: _customUnitController,
+                onUnitChanged: (v) {
+                  if (!mounted) return;
+                  setState(() => _selectedUnit = v);
+                },
+              ),
+          ]),
+        ],
+        if (_columnsConfig.productMetadata) ...[
+          const SizedBox(height: 10),
+          _buildMetadataSection(
+            storageLocationCtrl: _storageLocationController,
+            containerNumberCtrl: _containerNumberController,
+            batchNumberCtrl: _batchNumberController,
+            manufactureNameCtrl: _manufactureNameController,
+            supplierNameCtrl: _supplierNameController,
+            skuCodeCtrl: _skuCodeController,
+            notesCtrl: _notesController,
+            expiryDate: _expiryDate,
+            manufactureDate: _manufactureDate,
+            datePattern: _datePattern,
+            onExpiryChanged: (d) {
+              if (!mounted) return;
+              setState(() => _expiryDate = d);
+            },
+            onManufactureChanged: (d) {
+              if (!mounted) return;
+              setState(() => _manufactureDate = d);
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _addDialogModern() {
+    final l10n = AppLocalizations.of(context)!;
+    final cs = Theme.of(context).colorScheme;
+    final isService = _newItemType == 'service';
+    final kind = isService ? l10n.labelService : l10n.labelProduct;
+    return Material(
+      key: const ValueKey('modernAddDialog'),
+      color: Theme.of(context).cardColor,
+      elevation: 14,
+      shadowColor: Colors.black45,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 12, 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: BrandColors.primaryTint,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                      isService ? Icons.design_services_outlined : Icons.inventory_2_outlined,
+                      color: BrandColors.primary),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(l10n.productMgmtAddNewItemTitle(kind),
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(l10n.productMgmtEnterProductDetailsSubtitle,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: l10n.actionCancel,
+                  icon: const Icon(Icons.close, size: 22),
+                  onPressed: () {
+                    _clearForm();
+                    setState(() => _showAddPanelV2 = false);
+                  },
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: cs.outlineVariant),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              child: FocusTraversalGroup(
+                child: Form(key: _formKey, child: _addDialogFormModern()),
+              ),
+            ),
+          ),
+          Divider(height: 1, color: cs.outlineVariant),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 20, 14),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: 8,
+              children: [
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Checkbox(
+                    value: _addAnotherAfterSavingV2,
+                    onChanged: (v) =>
+                        setState(() => _addAnotherAfterSavingV2 = v ?? false),
+                  ),
+                  Text(l10n.customerMgmtAddAnotherLabel),
+                ]),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  OutlinedButton(
+                    onPressed: () {
+                      _clearForm();
+                      setState(() => _showAddPanelV2 = false);
+                    },
+                    child: Text(l10n.actionCancel),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.icon(
+                    onPressed: _isLoading ? null : _addProductV2,
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.save_outlined, size: 18),
+                    label: Text(_servicesWording
+                        ? l10n.mSvcSaveButton
+                        : l10n.productMgmtSaveProductButton),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -3115,6 +3450,8 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
     final taxCtrl = TextEditingController(text: product.tax_rate.toString());
     final stockCtrl =
         TextEditingController(text: AppFormatters.formatStock(product.stock));
+    final lowStockLimitCtrl =
+        TextEditingController(text: product.lowStockLimit?.toString() ?? '');
     final customUnitCtrl = TextEditingController(
         text: ProductUnits.presets.contains(product.unit) ? '' : product.unit);
     final storageCtrl = TextEditingController(text: metadata?.storageLocation ?? '');
@@ -3146,6 +3483,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
       discountCtrl.dispose();
       taxCtrl.dispose();
       stockCtrl.dispose();
+      lowStockLimitCtrl.dispose();
       customUnitCtrl.dispose();
       storageCtrl.dispose();
       containerCtrl.dispose();
@@ -3169,9 +3507,11 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
             TextInputType? keyboardType,
             bool isPrice = false,
             bool isStock = false,
+            bool isCount = false,
             bool isTaxRate = false,
             bool isRequired = false,
             String? prefixText,
+            String? helperText,
           }) {
             return _buildDialogTextField(
               controller,
@@ -3183,9 +3523,11 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
               keyboardType: keyboardType,
               isPrice: isPrice,
               isStock: isStock,
+              isCount: isCount,
               isTaxRate: isTaxRate,
               isRequired: isRequired,
               prefixText: prefixText,
+              helperText: helperText,
             );
           }
 
@@ -3227,6 +3569,9 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
                 unit: unit.trim(),
                 unlimitedStock: unlimitedStock,
                 priceIncludesTax: priceIncludesTax,
+                lowStockLimit: unlimitedStock
+                    ? null
+                    : int.tryParse(lowStockLimitCtrl.text.trim()),
               );
               await ref.read(productRepositoryProvider).updateProduct(updated);
               await ref.read(productRepositoryProvider).upsertProductMetadata(
@@ -3482,6 +3827,15 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
                                   subtitle:
                                       Text(l10n.productMgmtTrackInfiniteStockSubtitle),
                                 ),
+                              if (_columnsConfig.stock && !unlimitedStock) ...[
+                                const SizedBox(height: 12),
+                                field(lowStockLimitCtrl,
+                                    l10n.productMgmtLowStockLimitLabel,
+                                    Icons.notification_important_outlined,
+                                    keyboardType: TextInputType.number,
+                                    isCount: true,
+                                    helperText: l10n.productMgmtLowStockLimitHelper),
+                              ],
                             ],
                             if (_columnsConfig.productMetadata) ...[
                               const SizedBox(height: 8),
@@ -3757,6 +4111,8 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
 
   /// Opens the New Product / New Service panel for this page's kind.
   void _openAddPanelModern() {
+    // A "saved" message from the last add would sit on top of Save.
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     setState(() {
       _newItemType = widget.kind;
       _unlimitedStock = widget.kind == 'service' || !_columnsConfig.stock;
@@ -3856,7 +4212,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
               style: TextStyle(
                   fontSize: 14.5,
                   fontWeight: FontWeight.w700,
-                  color: p.stock > 10
+                  color: p.stock > p.effectiveLowStockLimit
                       ? const Color(0xFF16A34A)
                       : p.stock > 0
                           ? const Color(0xFFEA580C)
@@ -4451,7 +4807,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
 
   Widget _statusPillModern(Product p) {
     final l10n = AppLocalizations.of(context)!;
-    final (String text, Color color) = p.unlimitedStock || p.stock > 10
+    final (String text, Color color) = p.unlimitedStock || p.stock > p.effectiveLowStockLimit
         ? (l10n.mProdInStock, const Color(0xFF16A34A))
         : p.stock > 0
             ? (l10n.productMgmtLowStockTabLabel, const Color(0xFFEA580C))
@@ -4606,6 +4962,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
       unit: p.unit,
       unlimitedStock: p.unlimitedStock,
       priceIncludesTax: p.priceIncludesTax,
+      lowStockLimit: p.lowStockLimit,
     );
     try {
       await repo.insertProduct(copy);
@@ -4856,10 +5213,9 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
             );
           });
         }
-        final panelWidth = constraints.maxWidth < 750
-            ? constraints.maxWidth - 32
-            : (constraints.maxWidth * 0.42).clamp(520.0, 680.0);
-        return Stack(children: [
+        // expand: the dimmed layer and the Add dialog use the whole window,
+        // not just the height of a short list.
+        return Stack(fit: StackFit.expand, children: [
           SingleChildScrollView(
             key: const ValueKey('modernProductScroll'),
             padding: EdgeInsets.fromLTRB(pad, 20, pad, 24),
@@ -4888,7 +5244,20 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
                 child: Container(color: Colors.black.withValues(alpha: 0.3)),
               ),
             ),
-            Positioned(top: 16, right: 16, bottom: 16, width: panelWidth, child: _addPanelV2()),
+            Positioned.fill(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                        maxWidth: constraints.maxWidth < 750
+                            ? constraints.maxWidth - 32
+                            : 720),
+                    child: _addDialogModern(),
+                  ),
+                ),
+              ),
+            ),
           ],
         ]);
       }),
@@ -4919,6 +5288,7 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
     bool required = true,
     bool isPrice = false,
     bool isStock = false,
+    bool isCount = false,
     bool isTaxRate = false,
     String? prefixText,
     String? helperText,
@@ -4939,7 +5309,9 @@ class _ProductManagementScreenV2State extends ConsumerState<ProductManagementScr
           FocusScope.of(context).nextFocus();
         }
       },
-      inputFormatters: isPrice
+      inputFormatters: isCount
+          ? [FilteringTextInputFormatter.digitsOnly]
+          : isPrice
           ? [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}$'))]
           : isStock
               // Stock can be a decimal (12.5 kg).
@@ -5085,6 +5457,9 @@ class _UnitFieldState extends State<_UnitField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DropdownButtonFormField<String>(
+          // Fills its field and shortens a long label (Tamil "None") instead
+          // of overflowing in a narrow column.
+          isExpanded: true,
           value: _isCustom ? 'custom' : _presetValue,
           decoration: InputDecoration(
             labelText: l10n.fieldUnitLabel,

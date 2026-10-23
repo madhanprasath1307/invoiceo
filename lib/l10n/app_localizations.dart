@@ -1130,6 +1130,18 @@ abstract class AppLocalizations {
   /// **'Products need attention'**
   String get mProdLowStockSub;
 
+  /// No description provided for @mProdTrackStockTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Track stock for this product'**
+  String get mProdTrackStockTitle;
+
+  /// No description provided for @mProdTrackStockSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage inventory and get low stock alerts'**
+  String get mProdTrackStockSubtitle;
+
   /// No description provided for @mProdOutOfStockSub.
   ///
   /// In en, this message translates to:
@@ -4519,6 +4531,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Free-text notes'**
   String get productMgmtCsvDescNotes;
+
+  /// No description provided for @productMgmtCsvDescLowStockLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'Low-stock threshold for this product, blank = default 10'**
+  String get productMgmtCsvDescLowStockLimit;
+
+  /// No description provided for @productMgmtLowStockLimitLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Low-stock limit'**
+  String get productMgmtLowStockLimitLabel;
+
+  /// No description provided for @productMgmtLowStockLimitHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Shown in Low Stock when stock is at or below this number. Leave blank for the default (10).'**
+  String get productMgmtLowStockLimitHelper;
 
   /// No description provided for @productMgmtCsvDuplicateNote.
   ///

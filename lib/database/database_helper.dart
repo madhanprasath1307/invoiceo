@@ -18,7 +18,7 @@ class DatabaseHelper {
   static String? get path => _path;
   static Database? _database;
   static String _dbFileName = 'invoice_manager.db';
-  final dbVersion = 51;
+  final dbVersion = 52;
 
   /// Placeholder company name seeded by `_createDB`. Onboarding shows an
   /// empty name field while the saved name still equals it.
@@ -117,7 +117,8 @@ class DatabaseHelper {
         alias_name TEXT,
         unit TEXT DEFAULT '',
         unlimited_stock INTEGER DEFAULT 0,
-        price_includes_tax INTEGER DEFAULT 0
+        price_includes_tax INTEGER DEFAULT 0,
+        low_stock_limit INTEGER
       )
     ''');
 
@@ -903,6 +904,14 @@ class DatabaseHelper {
       // (50 -> 50.0); every other column, row and index is kept.
       await _runMigrationStep(db, 51, 'make_products_stock_real', () async {
         await _makeProductStockReal(db);
+      });
+    }
+
+    if (oldVersion < 52) {
+      // A product's own low-stock limit. NULL = the default (10), so every
+      // existing product keeps showing as low at 10 or less, as before.
+      await _runMigrationStep(db, 52, 'add_low_stock_limit_to_products', () async {
+        await db.execute('ALTER TABLE products ADD COLUMN low_stock_limit INTEGER');
       });
     }
   }

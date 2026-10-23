@@ -588,6 +588,13 @@ class AppLocalizationsHi extends AppLocalizations {
   String get mProdLowStockSub => 'ध्यान देने वाले उत्पाद';
 
   @override
+  String get mProdTrackStockTitle => 'Track stock for this product';
+
+  @override
+  String get mProdTrackStockSubtitle =>
+      'Manage inventory and get low stock alerts';
+
+  @override
   String get mProdOutOfStockSub => 'उपलब्ध नहीं';
 
   @override
@@ -2726,6 +2733,17 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get productMgmtCsvDescNotes => 'स्वतंत्र-पाठ टिप्पणियां';
+
+  @override
+  String get productMgmtCsvDescLowStockLimit =>
+      'इस उत्पाद की कम स्टॉक सीमा, खाली = डिफ़ॉल्ट 10';
+
+  @override
+  String get productMgmtLowStockLimitLabel => 'कम स्टॉक सीमा';
+
+  @override
+  String get productMgmtLowStockLimitHelper =>
+      'स्टॉक इस संख्या के बराबर या कम होने पर कम स्टॉक में दिखता है। डिफ़ॉल्ट (10) के लिए खाली छोड़ें।';
 
   @override
   String get productMgmtCsvDuplicateNote =>

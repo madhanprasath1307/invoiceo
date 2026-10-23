@@ -594,6 +594,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get mProdLowStockSub => 'Productos que requieren atención';
 
   @override
+  String get mProdTrackStockTitle => 'Track stock for this product';
+
+  @override
+  String get mProdTrackStockSubtitle =>
+      'Manage inventory and get low stock alerts';
+
+  @override
   String get mProdOutOfStockSub => 'No disponibles';
 
   @override
@@ -2748,6 +2755,17 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get productMgmtCsvDescNotes => 'Notas de texto libre';
+
+  @override
+  String get productMgmtCsvDescLowStockLimit =>
+      'Umbral de stock bajo del producto, vacío = 10 por defecto';
+
+  @override
+  String get productMgmtLowStockLimitLabel => 'Límite de stock bajo';
+
+  @override
+  String get productMgmtLowStockLimitHelper =>
+      'Aparece en Stock bajo cuando el stock es igual o menor a este número. Déjelo vacío para usar el valor predeterminado (10).';
 
   @override
   String get productMgmtCsvDuplicateNote =>

@@ -596,6 +596,13 @@ class AppLocalizationsTa extends AppLocalizations {
   String get mProdLowStockSub => 'கவனிக்க வேண்டியவை';
 
   @override
+  String get mProdTrackStockTitle => 'இந்தப் பொருளின் இருப்பைக் கண்காணி';
+
+  @override
+  String get mProdTrackStockSubtitle =>
+      'இருப்பை நிர்வகித்து, குறைந்த இருப்பு எச்சரிக்கை பெறுங்கள்';
+
+  @override
   String get mProdOutOfStockSub => 'கிடைக்கவில்லை';
 
   @override
@@ -2778,6 +2785,17 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get productMgmtCsvDescNotes => 'விருப்பப்படி எழுதும் குறிப்புகள்';
+
+  @override
+  String get productMgmtCsvDescLowStockLimit =>
+      'இந்தப் பொருளுக்கான குறைந்த இருப்பு வரம்பு, காலியாக விட்டால் இயல்புநிலை 10';
+
+  @override
+  String get productMgmtLowStockLimitLabel => 'குறைந்த இருப்பு வரம்பு';
+
+  @override
+  String get productMgmtLowStockLimitHelper =>
+      'இருப்பு இந்த எண்ணுக்கு சமமாகவோ குறைவாகவோ இருந்தால் \"குறைந்த இருப்பு\" பட்டியலில் காட்டப்படும். இயல்புநிலை (10) வேண்டுமெனில் காலியாக விடவும்.';
 
   @override
   String get productMgmtCsvDuplicateNote =>

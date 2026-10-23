@@ -167,13 +167,18 @@ class ProductService {
   static const _trackedExpr = 'COALESCE(unlimited_stock, 0) = 0';
   static const _stockExpr = 'COALESCE(stock, 0)';
   static const _taxExpr = 'COALESCE(tax_rate, 0)';
+  // A product's own limit, else the default 10.
+  static const _lowLimitExpr =
+      'COALESCE(low_stock_limit, ${Product.defaultLowStockLimit})';
+  static const _lowStockWhere =
+      '$_trackedExpr AND $_stockExpr > 0 AND $_stockExpr <= $_lowLimitExpr';
   // Only ISO-looking dates count (DateTime.tryParse fails on others).
   static const _expiredIdsSql = 'SELECT product_id FROM product_metadata '
       "WHERE expiry_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*' "
       'AND expiry_date < ?';
 
   /// [tab]: 'all' | 'product' | 'service' | 'low' | 'out' | 'expired' |
-  /// 'in_stock' (untracked, or more than 10 left: in_stock + low + out = all)
+  /// 'in_stock' (untracked, or above its low-stock limit: in_stock + low + out = all)
   /// | 'taxed' (tax above 0%) | 'tax_free' (0%) | 'no_hsn' (no HSN / SAC).
   /// [type] 'product' | 'service' limits the list to that kind (null or
   /// 'both': every row). Search: name, alias, HSN / SAC and SKU.
@@ -202,11 +207,11 @@ class ProductService {
         parts.add('$_typeExpr = ?');
         args.add(tab);
       case 'low':
-        parts.add('$_trackedExpr AND $_stockExpr > 0 AND $_stockExpr <= 10');
+        parts.add(_lowStockWhere);
       case 'out':
         parts.add('$_trackedExpr AND $_stockExpr <= 0');
       case 'in_stock':
-        parts.add('(NOT ($_trackedExpr) OR $_stockExpr > 10)');
+        parts.add('(NOT ($_trackedExpr) OR $_stockExpr > $_lowLimitExpr)');
       case 'expired':
         parts.add('id IN ($_expiredIdsSql)');
         args.add(DateTime.now().toIso8601String());
@@ -296,7 +301,7 @@ class ProductService {
       'SELECT COUNT(*) AS all_count, '
       "COALESCE(SUM($_typeExpr = 'product'), 0) AS products, "
       "COALESCE(SUM($_typeExpr = 'service'), 0) AS services, "
-      'COALESCE(SUM($_trackedExpr AND $_stockExpr > 0 AND $_stockExpr <= 10), 0) AS low_stock, '
+      'COALESCE(SUM($_lowStockWhere), 0) AS low_stock, '
       'COALESCE(SUM($_trackedExpr AND $_stockExpr <= 0), 0) AS out_of_stock, '
       'COALESCE(SUM(id IN ($_expiredIdsSql)), 0) AS expired '
       'FROM products',

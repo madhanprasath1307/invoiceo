@@ -573,6 +573,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mProdLowStockSub => '需要关注的产品';
 
   @override
+  String get mProdTrackStockTitle => 'Track stock for this product';
+
+  @override
+  String get mProdTrackStockSubtitle =>
+      'Manage inventory and get low stock alerts';
+
+  @override
   String get mProdOutOfStockSub => '不可用';
 
   @override
@@ -2628,6 +2635,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get productMgmtCsvDescNotes => '自由文本备注';
+
+  @override
+  String get productMgmtCsvDescLowStockLimit => '该产品的低库存阈值，留空 = 默认 10';
+
+  @override
+  String get productMgmtLowStockLimitLabel => '低库存阈值';
+
+  @override
+  String get productMgmtLowStockLimitHelper =>
+      '库存小于或等于此数量时显示在低库存中。留空则使用默认值（10）。';
 
   @override
   String get productMgmtCsvDuplicateNote =>
