@@ -21,9 +21,9 @@ SITE = 'https://invoiceo.in'
 NAME = 'Invoiceo'
 BUSINESS = 'Madcreations'
 EMAIL = 'madhanprasat2002r@gmail.com'
-VERSION = '1.0.6'
-RELEASE_DATE = '9 October 2026'
-RELEASE_ISO = '2026-10-09'
+VERSION = '1.0.7'
+RELEASE_DATE = '23 October 2026'
+RELEASE_ISO = '2026-10-23'
 COFFEE = 'https://buymeacoffee.com/madcreations'
 GH = 'https://github.com/Maddy-1303/invoiceo'
 # Fixed-name copies the release workflow adds to every release (.github/workflows/build.yml).
@@ -323,6 +323,15 @@ def phone_note(lang='en'):
             '</div></div></div>')
 
 
+def hero_send(lang='en'):
+    """Phones only (site.js): WhatsApp and Copy link right under the hero button,
+    so the visitor does not have to scroll to the download section."""
+    copy = 'லிங்கை காப்பி செய்' if lang == 'ta' else 'Copy link'
+    return (f'<div class="send-link hidden" data-hero-send>'
+            f'<a class="btn btn-secondary" href="#" data-send-whatsapp target="_blank" rel="noopener">{icon("message")}<span>WhatsApp</span></a>'
+            f'<button type="button" class="btn btn-ghost" data-send-copy>{icon("copy")}<span>{copy}</span></button></div>')
+
+
 PHONE_NOTE = phone_note('en')
 TRUST = ('<div class="dl-trust">' + ''.join(badge(t, 'teal', 'check') for t in
                                            ['Free forever', 'No credit card', 'No subscription', 'Open source']) + '</div>')
@@ -536,6 +545,7 @@ hero = f'''<section class="hero" aria-labelledby="hero-title">
         <a class="btn btn-primary btn-lg" href="#download" data-os-download><span data-os-icon>{icon('download')}</span><span data-os-label>Download free</span></a>
         {btn('See the features', '#features', 'secondary', 'lg')}
       </div>
+      {hero_send('en')}
       <p class="hero-meta" data-hero-meta>Free · Version <span data-version>{VERSION}</span> · For Windows, macOS and Linux</p>
       {checks(['Free forever', 'Open source', 'Works offline', 'No sign-up'], 'checks-inline')}
     </div>
@@ -822,6 +832,7 @@ ta_hero = f'''<section class="hero" aria-labelledby="hero-title">
         <a class="btn btn-primary btn-lg" href="#download" data-os-download><span data-os-icon>{icon('download')}</span><span data-os-label>இலவச டவுன்லோட்</span></a>
         {btn('வசதிகளைப் பாருங்கள்', '#features', 'secondary', 'lg')}
       </div>
+      {hero_send('ta')}
       <p class="hero-meta" data-hero-meta>இலவசம் · பதிப்பு <span data-version>{VERSION}</span> · Windows, macOS, Linux கணினிகளுக்கு</p>
       {checks(['என்றும் இலவசம்', 'ஓப்பன் சோர்ஸ்', 'இன்டர்நெட் தேவையில்லை', 'பதிவு தேவையில்லை'], 'checks-inline')}
     </div>
@@ -1326,6 +1337,17 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
       <h2>Version {VERSION} {badge('Latest', 'brand')}</h2>
       <p class="date">{RELEASE_DATE}</p>
       <ul>
+        <li><b>Low-stock limit for each product.</b> Until now every product counted as “low” at 10 or less. Now you can set your own limit on a product, for example 50 for rice and 2 for an expensive item. The Low Stock list, its count, and the colour and label in the product list all follow it. Leave it blank and a product works exactly as before.</li>
+        <li>The limit is in the New Product and Edit forms and in the products CSV (a new <code>low_stock_limit</code> column), and Duplicate keeps it.</li>
+        <li><b>New Product / New Service window.</b> In the Modern layout, adding a product now opens a clear window with General, Pricing and Inventory sections and a Track stock switch.</li>
+        <li>Fixes: the “saved” message no longer covers the Save button on the next product, and the Unit box no longer overflows in Tamil.</li>
+        <li>Your existing data and backups are safe: the app upgrades its database on first start, and older backups still restore.</li>
+      </ul>
+    </article>
+    <article class="release" id="v1.0.6">
+      <h2>Version 1.0.6</h2>
+      <p class="date">9 October 2026</p>
+      <ul>
         <li><b>Tamil Settings screens read better.</b> PDF Settings, Invoice Settings, Company Info and Software Info now show the full Tamil words: the Reset to default button, template descriptions, and the notes under the invoice settings boxes are no longer cut off.</li>
         <li>Software Info shows the app description in Tamil, and the “Buy me a coffee” button reads clearly in Tamil.</li>
         <li>Shorter, clearer Tamil wording for a few settings labels.</li>
@@ -1333,7 +1355,7 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
     </article>
     <article class="release" id="v1.0.5">
       <h2>Version 1.0.5</h2>
-      <p class="date">{RELEASE_DATE}</p>
+      <p class="date">9 October 2026</p>
       <ul>
         <li><b>Tamil screens read better.</b> Long Tamil labels are no longer cut off with “…”: the sidebar, page titles, dashboard cards and charts, the invoice, customer and product lists, and the Reports menu now show the full words.</li>
         <li>On the New Invoice screen, when the buttons are too narrow for their names, Create goes full width with Save Draft under it.</li>
@@ -1342,14 +1364,14 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
     </article>
     <article class="release" id="v1.0.4">
       <h2>Version 1.0.4</h2>
-      <p class="date">{RELEASE_DATE}</p>
+      <p class="date">9 October 2026</p>
       <ul>
         <li>Anonymous usage counts are now on, so we can see how many shops use {NAME}: a short message when the app is first opened, once a day while it is used, and once when the first invoice is made. They never include your business data. Turn them off any time in Settings → Software Info (see the <a href="privacy.html">privacy policy</a>).</li>
       </ul>
     </article>
     <article class="release" id="v1.0.3">
       <h2>Version 1.0.3</h2>
-      <p class="date">{RELEASE_DATE}</p>
+      <p class="date">9 October 2026</p>
       <ul>
         <li><b>Automatic backup.</b> Turn it on in Settings → Backup: every day or every week, while the app is open, a copy of your company’s data is saved by itself. Choose a folder inside Google Drive or OneDrive and the copies reach the cloud automatically.</li>
         <li>Keep the last 5, 10 or 30 automatic copies; older automatic copies are removed, and nothing else in the folder is touched.</li>
@@ -1359,12 +1381,12 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
     </article>
     <article class="release" id="v1.0.2">
       <h2>Version 1.0.2</h2>
-      <p class="date">{RELEASE_DATE}</p>
+      <p class="date">8 October 2026</p>
       <p>The app is the same as version 1.0.1: there are no new features or fixes in this release. If you already have 1.0.1, you don’t need to update.</p>
     </article>
     <article class="release" id="v1.0.1">
       <h2>Version 1.0.1</h2>
-      <p class="date">{RELEASE_DATE}</p>
+      <p class="date">8 October 2026</p>
       <p>Fixes and improvements from release testing.</p>
       <ul>
         <li>Stock can be a decimal number, so selling 0.5 kg takes exactly 0.5 from stock.</li>
@@ -1379,7 +1401,7 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
     </article>
     <article class="release" id="v1.0.0">
       <h2>Version 1.0.0</h2>
-      <p class="date">{RELEASE_DATE}</p>
+      <p class="date">8 October 2026</p>
       <p>The first release under the {NAME} name.</p>
       <ul>
         <li>New name, logo and a clean light design.</li>
