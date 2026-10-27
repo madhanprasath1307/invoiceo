@@ -13,6 +13,7 @@ import hashlib
 import html
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -24,6 +25,13 @@ EMAIL = 'madhanprasat2002r@gmail.com'
 VERSION = '1.0.7'
 RELEASE_DATE = '23 October 2026'
 RELEASE_ISO = '2026-10-23'
+# When the website's own text last changed. Set it to the publish date whenever
+# page content changes between app releases; pages use the later of this and
+# RELEASE_ISO as their dateModified and sitemap <lastmod>. PAGE_UPDATED can give
+# a single page its own date. Privacy/terms keep their policy date (RELEASE_ISO).
+SITE_UPDATED_ISO = '2026-10-27'
+PAGE_UPDATED = {}
+PAGE_MODIFIED = {}  # filled by page(): filename -> dateModified, reused by the sitemap
 COFFEE = 'https://buymeacoffee.com/madcreations'
 GH = 'https://github.com/Maddy-1303/invoiceo'
 # Fixed-name copies the release workflow adds to every release (.github/workflows/build.yml).
@@ -118,6 +126,10 @@ def asset(path):
 
 def esc(s):
     return html.escape(s, quote=True)
+
+
+def strip_tags(s):
+    return re.sub(r'<[^>]+>', '', s)
 
 
 def icon(name):
@@ -449,7 +461,7 @@ def footer(home=False, lang='en'):
                          ('सहायता अनुरोध', support), ('WhatsApp', whatsapp), ('सुझाव', feedback),
                          ('अपनी ज़रूरत के फ़ीचर (सशुल्क)', 'href="customization.html"')]),
                 ('कानूनी', [('लाइसेंस', 'href="licenses.html"'), ('गोपनीयता', 'href="privacy.html"'),
-                           ('नियम', 'href="terms.html"')])]
+                           ('नियम', 'href="terms.html"'), ('llms.txt', 'href="llms.txt" lang="en"')])]
         tagline = 'Windows, macOS और Linux के लिए मुफ़्त, ओपन सोर्स बिलिंग सॉफ़्टवेयर।'
         coffee = 'मुझे एक कॉफ़ी पिलाएं'
         credit = (f'© <span data-year>2026</span> {BUSINESS}. Invoiso पर आधारित, '
@@ -463,7 +475,7 @@ def footer(home=False, lang='en'):
                           ('உதவி கோரிக்கை', support), ('WhatsApp', whatsapp), ('கருத்து', feedback),
                           ('தனிப்பயன் வசதிகள் (கட்டணம்)', 'href="customization.html"')]),
                 ('சட்டம்', [('உரிமங்கள்', 'href="licenses.html"'), ('தனியுரிமை', 'href="privacy.html"'),
-                            ('விதிமுறைகள்', 'href="terms.html"')])]
+                            ('விதிமுறைகள்', 'href="terms.html"'), ('llms.txt', 'href="llms.txt" lang="en"')])]
         tagline = 'Windows, macOS, Linux கணினிகளுக்கான இலவச, ஓப்பன் சோர்ஸ் பில்லிங் சாஃப்ட்வேர்.'
         coffee = 'ஒரு காபி வாங்கித் தாருங்கள்'
         credit = (f'© <span data-year>2026</span> {BUSINESS}. Invoiso-வை அடிப்படையாகக் கொண்டது, '
@@ -475,7 +487,8 @@ def footer(home=False, lang='en'):
                              ('What’s new', 'href="changelog.html"')]),
                 ('Help', [('FAQ', 'href="faq.html"'), ('Contact', 'href="contact.html"'), ('Support request', support),
                           ('WhatsApp', whatsapp), ('Feedback', feedback), ('Custom features (paid)', 'href="customization.html"')]),
-                ('Legal', [('Licenses', 'href="licenses.html"'), ('Privacy', 'href="privacy.html"'), ('Terms', 'href="terms.html"')])]
+                ('Legal', [('Licenses', 'href="licenses.html"'), ('Privacy', 'href="privacy.html"'), ('Terms', 'href="terms.html"'),
+                           ('llms.txt', 'href="llms.txt"')])]
         tagline = 'Free, open-source billing software for Windows, macOS and Linux.'
         coffee = 'Buy me a coffee'
         credit = (f'© <span data-year>2026</span> {BUSINESS}. Built on Invoiso, released under the '
@@ -498,13 +511,37 @@ def footer(home=False, lang='en'):
 </footer>'''
 
 
-def page(filename, title, description, active, body, jsonld=None, noindex=False, lang='en'):
+def page(filename, title, description, active, body, jsonld=None, noindex=False, lang='en', crumb=None, page_type='WebPage'):
+    """crumb: the page's name in its Home > Page breadcrumb (inner pages only).
+    jsonld: one schema.org object or a list; every page also gets a WebPage
+    (or the given page_type) with its language and dateModified."""
     home = filename in HOMES.values()
     canonical = SITE + '/' + ('' if filename == 'index.html' else filename)
-    ld = ''
-    if jsonld:
-        ld = '\n  <script type="application/ld+json">\n' + json.dumps(jsonld, ensure_ascii=False, indent=2) + '\n  </script>'
-    full_title = title if home else f'{title} — {NAME}'
+    full_title = title if home or NAME in title else f'{title} — {NAME}'
+    modified = PAGE_UPDATED.get(filename, max(RELEASE_ISO, SITE_UPDATED_ISO))
+    PAGE_MODIFIED[filename] = modified
+    blocks = [dict(b) for b in (jsonld if isinstance(jsonld, list) else [jsonld] if jsonld else [])]
+    webpage = {'@type': page_type, '@id': canonical + '#webpage', 'url': canonical, 'name': full_title,
+               'description': description, 'inLanguage': lang, 'dateModified': modified,
+               'isPartOf': {'@type': 'WebSite', '@id': SITE + '/#website', 'name': NAME, 'url': SITE + '/'},
+               'publisher': ORG_REF}
+    if crumb:
+        webpage['breadcrumb'] = {'@id': canonical + '#breadcrumb'}
+    if home:
+        webpage['mainEntity'] = {'@id': SOFTWARE_ID}
+    # A page that is already a kind of WebPage (FAQPage) gets the fields itself.
+    own = next((b for b in blocks if b.get('@type') in ('FAQPage', 'ContactPage', 'AboutPage')), None)
+    if own:
+        own.update({k: v for k, v in webpage.items() if k != '@type'})
+    else:
+        blocks.append({'@context': 'https://schema.org', **webpage})
+    if crumb:
+        blocks.append({'@context': 'https://schema.org', '@type': 'BreadcrumbList', '@id': canonical + '#breadcrumb',
+                       'itemListElement': [
+                           {'@type': 'ListItem', 'position': 1, 'name': 'Home', 'item': SITE + '/'},
+                           {'@type': 'ListItem', 'position': 2, 'name': crumb, 'item': canonical}]})
+    ld = ''.join('\n  <script type="application/ld+json">\n' + json.dumps(b, ensure_ascii=False, indent=2) + '\n  </script>'
+                 for b in blocks)
     # The home pages name each other, so Google shows Tamil and Hindi searchers their own.
     alternates = ''
     if home:
@@ -529,6 +566,10 @@ def page(filename, title, description, active, body, jsonld=None, noindex=False,
   <meta property="og:url" content="{canonical}">
   <meta property="og:image" content="{SITE}/assets/images/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{esc(full_title)}">
+  <meta name="twitter:description" content="{esc(description)}">
+  <meta name="twitter:image" content="{SITE}/assets/images/og-image.png">
+  <link rel="alternate" type="text/markdown" href="/llms.txt" title="llms.txt">
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png">
@@ -557,7 +598,51 @@ def page_head(eyebrow, title, lead=None, extra=''):
             f'    {lead_html}{extra}\n  </div>\n</section>')
 
 
-ORG = {'@type': 'Organization', 'name': BUSINESS, 'email': EMAIL, 'url': SITE + '/'}
+ORG_ID = SITE + '/#organization'
+SOFTWARE_ID = SITE + '/#software'
+ORG_REF = {'@type': 'Organization', '@id': ORG_ID, 'name': BUSINESS, 'url': SITE + '/'}
+# Only facts the site already shows. No sameAs: the owner has given no social profiles.
+ORG = {'@type': 'Organization', '@id': ORG_ID, 'name': BUSINESS, 'email': EMAIL, 'url': SITE + '/',
+       'logo': {'@type': 'ImageObject', 'url': SITE + '/assets/images/icon-512.png', 'width': 512, 'height': 512},
+       'description': f'{BUSINESS} makes {NAME}, free and open-source billing software, and builds paid custom features '
+                      'for businesses on request.',
+       'address': {'@type': 'PostalAddress', 'addressCountry': 'IN'},
+       'contactPoint': {'@type': 'ContactPoint', 'contactType': 'customer support', 'email': EMAIL,
+                        'url': SITE + '/contact.html'}}
+# The app's own languages (English, Tamil, Hindi, Nepali, French, Spanish, Chinese, Tibetan).
+APP_LANGS = ['en', 'ta', 'hi', 'ne', 'fr', 'es', 'zh', 'bo']
+WEBSITE_LD = {'@context': 'https://schema.org', '@type': 'WebSite', '@id': SITE + '/#website', 'name': NAME,
+              'url': SITE + '/', 'inLanguage': list(HOMES),
+              'description': f'{NAME}: free, open-source offline billing and GST invoice software for Windows, macOS and Linux.',
+              'publisher': {'@id': ORG_ID}}
+
+
+def software_ld(description, groups, shot=lambda n: n):
+    """SoftwareApplication for a home page. groups: that page's feature groups.
+    One @id and url on all three home pages, so they describe the same app."""
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'SoftwareApplication',
+        '@id': SOFTWARE_ID,
+        'name': NAME,
+        'applicationCategory': 'BusinessApplication',
+        'applicationSubCategory': 'Billing and invoicing software',
+        'operatingSystem': 'Windows 10, Windows 11, macOS 12 or later, Linux',
+        'softwareVersion': VERSION,
+        'datePublished': RELEASE_ISO,
+        'description': description,
+        'url': SITE + '/',
+        'downloadUrl': SITE + '/download.html',
+        'releaseNotes': SITE + '/changelog.html',
+        'image': SITE + '/assets/images/og-image.png',
+        'screenshot': [f'{SITE}/assets/images/screens/{shot(n)}.png' for n, _, _ in screen_cards],
+        'featureList': [html.unescape(strip_tags(item)) for _, _, items, _ in groups for item in items],
+        'inLanguage': APP_LANGS,
+        'isAccessibleForFree': True,
+        'license': 'https://opensource.org/licenses/MIT',
+        'offers': {'@type': 'Offer', 'price': '0', 'priceCurrency': 'INR'},
+        'publisher': ORG,
+    }
 
 # ─────────────────────────────── Testimonials ──────────────────────────────
 # Real customers only, with their permission, in words they have approved.
@@ -855,23 +940,11 @@ final_cta = f'''<section class="cta-section" aria-labelledby="cta-title">
 </section>'''
 
 page('index.html', f'{NAME} — Free offline billing and GST invoice software',
-     f'{NAME} is free, open-source billing software for Windows, macOS and Linux. Make GST invoices, quotations and receipts offline, '
-     'print on A4 or thermal printers, in English, Tamil and more.',
+     f'{NAME} is free, open-source billing software for Windows, macOS and Linux. Make GST invoices, quotations and '
+     'receipts offline, in Tamil, Hindi and more.',
      'home', '\n\n'.join([hero, facts, why, how, features, shots, who, customers, local_global, privacy, open_source, download, home_faq, final_cta]),
-     jsonld={
-         '@context': 'https://schema.org',
-         '@type': 'SoftwareApplication',
-         'name': NAME,
-         'applicationCategory': 'BusinessApplication',
-         'operatingSystem': 'Windows, macOS, Linux',
-         'softwareVersion': VERSION,
-         'datePublished': RELEASE_ISO,
-         'description': 'Free, open-source offline billing and GST invoice software for small businesses.',
-         'url': SITE + '/',
-         'license': 'https://opensource.org/licenses/MIT',
-         'offers': {'@type': 'Offer', 'price': '0', 'priceCurrency': 'INR'},
-         'publisher': ORG,
-     })
+     jsonld=[software_ld('Free, open-source offline billing and GST invoice software for small businesses.', GROUPS),
+             WEBSITE_LD])
 
 # ─────────────────────────────── Tamil home ────────────────────────────────
 # ta.html: the home page in Tamil, for shops that search in Tamil. Same facts
@@ -1117,26 +1190,14 @@ ta_cta = f'''<section class="cta-section" aria-labelledby="cta-title">
 </section>'''
 
 page('ta.html', f'இலவச பில்லிங் சாஃப்ட்வேர் தமிழில் — GST பில், ஆஃப்லைன் | {NAME}',
+     # Under 160 characters: the offline sentence is left to the title (ஆஃப்லைன்).
      f'{NAME} — கடைகளுக்கான இலவச பில்லிங் சாஃப்ட்வேர். தமிழிலேயே GST பில், கொட்டேஷன், ரசீது போடலாம். '
-     'இன்டர்நெட் இல்லாமலும் வேலை செய்யும். Windows, Mac, Linux-க்கு இலவச டவுன்லோட்.',
+     'Windows, Mac, Linux-க்கு இலவச டவுன்லோட்.',
      'home', '\n\n'.join([ta_hero, ta_facts, ta_why, ta_how, ta_features, ta_shots, ta_who, ta_customers, ta_tamil, ta_privacy, ta_free,
                           ta_download, ta_faq, ta_cta]),
      lang='ta',
-     jsonld={
-         '@context': 'https://schema.org',
-         '@type': 'SoftwareApplication',
-         'name': NAME,
-         'inLanguage': 'ta',
-         'applicationCategory': 'BusinessApplication',
-         'operatingSystem': 'Windows, macOS, Linux',
-         'softwareVersion': VERSION,
-         'datePublished': RELEASE_ISO,
-         'description': 'சிறு கடைகளுக்கான இலவச, ஓப்பன் சோர்ஸ், ஆஃப்லைன் பில்லிங் மற்றும் GST பில் சாஃப்ட்வேர்.',
-         'url': SITE + '/ta.html',
-         'license': 'https://opensource.org/licenses/MIT',
-         'offers': {'@type': 'Offer', 'price': '0', 'priceCurrency': 'INR'},
-         'publisher': ORG,
-     })
+     jsonld=[software_ld('சிறு கடைகளுக்கான இலவச, ஓப்பன் சோர்ஸ், ஆஃப்லைன் பில்லிங் மற்றும் GST பில் சாஃப்ட்வேர்.', TA_GROUPS, ta_shot),
+             WEBSITE_LD])
 
 # ─────────────────────────────── Hindi home ────────────────────────────────
 # hi.html: the home page in Hindi, built like ta.html. Same facts as the
@@ -1381,26 +1442,14 @@ hi_cta = f'''<section class="cta-section" aria-labelledby="cta-title">
 </section>'''
 
 page('hi.html', f'मुफ़्त बिलिंग सॉफ़्टवेयर हिन्दी में — GST बिल, बिना इंटरनेट | {NAME}',
+     # Under 160 characters: the offline sentence is left to the title (बिना इंटरनेट).
      f'{NAME} — दुकानों के लिए मुफ़्त बिलिंग सॉफ़्टवेयर। हिन्दी में GST बिल, कोटेशन और रसीद बनाइए। '
-     'बिना इंटरनेट के चलता है। Windows, Mac और Linux के लिए मुफ़्त डाउनलोड।',
+     'Windows, Mac और Linux के लिए मुफ़्त डाउनलोड।',
      'home', '\n\n'.join([hi_hero, hi_facts, hi_why, hi_how, hi_features, hi_shots, hi_who, hi_customers, hi_hindi, hi_privacy, hi_free,
                           hi_download, hi_faq, hi_cta]),
      lang='hi',
-     jsonld={
-         '@context': 'https://schema.org',
-         '@type': 'SoftwareApplication',
-         'name': NAME,
-         'inLanguage': 'hi',
-         'applicationCategory': 'BusinessApplication',
-         'operatingSystem': 'Windows, macOS, Linux',
-         'softwareVersion': VERSION,
-         'datePublished': RELEASE_ISO,
-         'description': 'छोटी दुकानों के लिए मुफ़्त, ओपन सोर्स, ऑफ़लाइन बिलिंग और GST इनवॉइस सॉफ़्टवेयर।',
-         'url': SITE + '/hi.html',
-         'license': 'https://opensource.org/licenses/MIT',
-         'offers': {'@type': 'Offer', 'price': '0', 'priceCurrency': 'INR'},
-         'publisher': ORG,
-     })
+     jsonld=[software_ld('छोटी दुकानों के लिए मुफ़्त, ओपन सोर्स, ऑफ़लाइन बिलिंग और GST इनवॉइस सॉफ़्टवेयर।', HI_GROUPS, hi_shot),
+             WEBSITE_LD])
 
 # ──────────────────────────────── Download ─────────────────────────────────
 download_body = page_head(
@@ -1428,16 +1477,17 @@ download_body = page_head(
 <section class="section section-flush" aria-label="More help">
   <div class="wrap">
     <div class="grid-auto">
-      <div class="card">{tile('refresh')}<h2 class="h4">Updating to a new version</h2><p>Download the new installer and install it over the old version. Your data is kept, but make a backup first from <b>Settings → Backup</b> in the app.</p></div>
-      <div class="card">{tile('help')}<h2 class="h4">Need help installing?</h2><p>Read the <a href="faq.html">FAQ</a> or <a href="contact.html">contact us</a>, and we will help you get started.</p></div>
-      <div class="card">{tile('gift', 'teal')}<h2 class="h4">Free, on every computer</h2><p>You never need to pay to download {NAME}, install it on more computers or keep using it.</p></div>
+      <div class="card">{tile('refresh')}<h2 class="h4">Updating to a new version</h2><p>Download the new installer and install it over the old version. Your data is kept, but make a backup first from <b>Settings → Backup</b> in the app. The <a href="changelog.html">release notes for every version</a> show what changed.</p></div>
+      <div class="card">{tile('help')}<h2 class="h4">Need help installing?</h2><p>Read the <a href="faq.html#installing-and-updating">answers about installing and updating</a> or <a href="contact.html">contact us</a>, and we will help you get started.</p></div>
+      <div class="card">{tile('gift', 'teal')}<h2 class="h4">Free, on every computer</h2><p>You never need to pay to download {NAME}, install it on more computers or keep using it. Only work made for you on request is paid: see <a href="customization.html">custom features</a>.</p></div>
     </div>
   </div>
 </section>'''
 
-page('download.html', 'Download',
-     f'Download {NAME} free for Windows, macOS and Linux, with step-by-step install help.',
-     'download', download_body)
+page('download.html', f'Download {NAME} — free billing software for PC and Mac',
+     f'Download {NAME} free for Windows 10/11, macOS 12+ and Linux (.deb or AppImage). No sign-up or licence key, '
+     'with step-by-step install help for each system.',
+     'download', download_body, crumb='Download')
 
 # ────────────────────────────── Customization ──────────────────────────────
 CUSTOM = [
@@ -1465,6 +1515,7 @@ recent_work = f'''<section class="section" id="work" aria-labelledby="work-title
       <div class="stack" style="gap: 28px">
         <div class="stack"><h3 class="h4">What it does</h3>{checks(ENERGY_WORK)}</div>
         {testimonial_card(TESTIMONIALS[0], link=False)}
+        <p class="small">Read <a href="reviews.html">what Green &amp; Green Agri Solutions say about {NAME}</a>.</p>
       </div>
     </div>
   </div>
@@ -1476,7 +1527,8 @@ customization_body = page_head(
 
 <section class="page-body" aria-labelledby="what-title">
   <div class="wrap">
-    {section_head('What we can make', 'Made for your business', 'A few examples. If your idea is not on the list, ask anyway.', 'what-title')}
+    {section_head('What we can make', 'Made for your business', 'A few examples. If your idea is not on the list, ask anyway. '
+                  'Everything already in the app stays free: see <a href="index.html#features">the features of the free version</a> first.', 'what-title')}
     <div class="grid-auto mt-4">{''.join(f'<div class="card">{tile(i, "neutral")}<h3>{t}</h3><p>{d}</p></div>' for i, t, d in CUSTOM)}</div>
   </div>
 </section>
@@ -1499,12 +1551,13 @@ customization_body = page_head(
       <p><b>The request form is coming soon.</b></p>
       <p>Until then, write to us at <a href="mailto:{EMAIL}?subject=Customization%20request">{EMAIL}</a><span data-block> or message us on <a data-whatsapp target="_blank" rel="noopener">WhatsApp</a></span>.</p>
     </div>
+    <p class="center small mt-3">Questions first? Read the <a href="faq.html#help-and-custom-work">answers about custom work</a> or see <a href="contact.html">all the ways to contact us</a>.</p>
   </div>
 </section>'''
 
-page('customization.html', 'Customization',
+page('customization.html', 'Custom bill formats, reports and features',
      f'{NAME} is free; extra features, invoice designs, reports and exports for your business are built on request and quoted per job.',
-     'customization', customization_body)
+     'customization', customization_body, crumb='Customization')
 
 # ─────────────────────────────────── FAQ ───────────────────────────────────
 FAQ_GROUPS = [
@@ -1540,7 +1593,8 @@ FAQ_GROUPS = [
         ('Does it work with a barcode scanner?',
          'Yes. A USB barcode scanner that types the code works on the New Invoice screen: scan a product to add it to the bill.'),
         ('Is it right for a small shop?',
-         'Yes. Barcode scanning, thermal receipts, stock levels, batch and expiry dates, and daily sales reports are built in.'),
+         'Yes. Barcode scanning, thermal receipts, stock levels, batch and expiry dates, and daily sales reports are built in. '
+         'See <a href="index.html#features">all the features</a>.'),
         ('Can I manage more than one business?',
          'Yes. You can add several companies on one computer. Each company keeps its own customers, products, invoices and settings.'),
         ('Can more than one person use it?',
@@ -1550,13 +1604,13 @@ FAQ_GROUPS = [
         ('Which computers does it run on?',
          'Windows 10 and 11 (64-bit), macOS 12 Monterey or later, and Linux: a .deb for Ubuntu 22.04+, Debian 12+ and Linux Mint 21+, and an AppImage for other distributions. There is no phone app.'),
         ('Windows says “Windows protected your PC”. Is it safe?',
-         'This message appears for installers that are not code-signed yet. If you downloaded Invoiceo from this website, click <b>More info</b> and then <b>Run anyway</b>.'),
+         'This message appears for installers that are not code-signed yet. If you downloaded Invoiceo from this website, click <b>More info</b> and then <b>Run anyway</b>. The <a href="download.html#windows">Windows install steps</a> walk you through it.'),
         ('macOS says it cannot check the app for malicious software.',
          'The app is not notarised by Apple yet. Click <b>Done</b>, open <b>System Settings → Privacy &amp; Security</b>, scroll down to the message about Invoiceo and click <b>Open Anyway</b>. On macOS 14 or older, Control-click Invoiceo in Applications and choose <b>Open</b>. You only need to do this the first time.'),
         ('How do I update to a new version?',
          'Download the new version from the <a href="download.html">Download page</a> and install it over the old one. Your data is kept, but make a backup first to be safe. See what changed on the <a href="changelog.html">What’s new page</a>.'),
         ('How do I move to a new computer?',
-         'Make a backup of each company on the old computer, copy the backup file to the new one, install Invoiceo there and import the backup from <b>Settings → Backup</b>.'),
+         'Make a backup of each company on the old computer, copy the backup file to the new one, <a href="download.html">install Invoiceo there</a> and import the backup from <b>Settings → Backup</b>.'),
     ]),
     ('Help and custom work', [
         ('Can you add a feature for my business?',
@@ -1566,11 +1620,6 @@ FAQ_GROUPS = [
     ]),
 ]
 FAQ = [qa for _, items in FAQ_GROUPS for qa in items]
-
-
-def strip_tags(s):
-    import re
-    return re.sub(r'<[^>]+>', '', s)
 
 
 faq_body = page_head('Help', 'Frequently asked questions', f'Short answers about {NAME}. Can’t find yours? <a href="contact.html">Ask us</a>.') + '\n\n<section class="page-body">\n  <div class="wrap measure">\n' + '\n'.join(
@@ -1590,10 +1639,38 @@ reviews_body = page_head('Reviews', 'What our customers say',
         <h2 class="h3" id="rv-work">An energy bill built for Green &amp; Green Agri Solutions</h2>
         <p>Their monthly power-sale bill: units, rate, deductions and net amount, ready in a few clicks each month.</p>
       </div>
-      <figure class="doc-full"><a href="{_energy_png}" target="_blank" rel="noopener" title="Open full size"><img src="{_energy_png}" width="{_ew}" height="{_eh}" alt="A sample energy bill made with {NAME}: units generated and allotted, net units at the rate, deductions and the net amount" loading="lazy" decoding="async"></a>
+      <figure class="doc-full"><a href="{_energy_png}" target="_blank" rel="noopener" title="Open full size"><img src="{_energy_png}" width="{_ew}" height="{_eh}" alt="The monthly power-sale bill built into {NAME} for Green &amp; Green Agri Solutions, printed with made-up names and numbers: units, rate, deductions under Less:, round off and the net amount in words" loading="lazy" decoding="async"></a>
         <figcaption>Shown with sample data: every name and number on it is made up.</figcaption></figure>
       {''.join(testimonial_card(t) for t in TESTIMONIALS)}
       <p class="center">{btn('See what this energy bill does', 'customization.html#work', 'secondary', '', 'arrow')}</p>
+    </div>
+  </div>
+</section>
+
+<section class="section section-subtle" aria-labelledby="rv-about">
+  <div class="wrap">
+    <div class="prose" style="margin: 0 auto">
+    <h2 id="rv-about">About this custom work</h2>
+    <p>Green &amp; Green Agri Solutions, in Udumalai, works in agricultural products and solar power. Each month they bill for the
+      wind and solar power they generate, and that bill has its own rules: units, a monthly rate and a list of deductions that
+      an ordinary invoice does not have. We built the bill into {NAME} for them as a paid customization.</p>
+    <p>If your trade needs a bill of its own, see <a href="customization.html">custom bill formats
+      and features</a>. Every request is quoted on its own, and you decide before any work starts.</p>
+
+    <h2>How we show reviews</h2>
+    <p>Every review on this page comes from a real business that uses {NAME}. We show it only with their permission, in words they
+      have approved, and we name the business only when they agree. There are no star ratings or sample reviews here.</p>
+
+    <h2>Share your experience</h2>
+    <p>If you use {NAME}, we would like to hear from you, whether it is praise, a problem or an idea. Helpful things to tell us:</p>
+    <ul>
+      <li>what kind of business you run, and how many people use the app;</li>
+      <li>what you use most, such as GST invoices, thermal receipts, stock or reports;</li>
+      <li>what saves you time, and what could work better.</li>
+    </ul>
+    <p>Use the buttons below to send it. Something not working? The <a href="contact.html">contact page</a> has the support
+      form, and the <a href="faq.html">frequently asked questions</a> may already have the answer. Not using {NAME} yet?
+      <a href="download.html">Download it free for Windows, macOS or Linux</a>.</p>
     </div>
   </div>
 </section>
@@ -1608,18 +1685,20 @@ reviews_body = page_head('Reviews', 'What our customers say',
   </div>
 </section>'''
 
-page('reviews.html', 'Customer reviews',
-     f'What businesses say about {NAME}, the free billing software, and the custom features we built for them.',
-     'reviews', reviews_body)
+page('reviews.html', 'Customer reviews and custom billing work',
+     f'What a customer says about {NAME}, the free billing software, and the custom energy bill we built for a solar power '
+     'company in Udumalai.',
+     'reviews', reviews_body, crumb='Customer reviews')
 
-page('faq.html', 'FAQ',
+page('faq.html', 'FAQ: free offline GST billing software',
      f'Answers about {NAME}: price, open source, offline use, where data is stored, GST, printers, Tamil, barcode scanners, installing and updating.',
-     'faq', faq_body, jsonld={
+     'faq', faq_body, crumb='FAQ', jsonld={
          '@context': 'https://schema.org',
          '@type': 'FAQPage',
          'mainEntity': [
              {'@type': 'Question', 'name': q,
-              'acceptedAnswer': {'@type': 'Answer', 'text': strip_tags(' '.join(a) if isinstance(a, list) else a)}}
+              'acceptedAnswer': {'@type': 'Answer', 'text': re.sub(r'\s+', ' ', html.unescape(strip_tags(
+                  ' '.join(a) if isinstance(a, list) else a))).strip()}}
              for q, a in FAQ],
      })
 
@@ -1646,20 +1725,64 @@ contact_body = page_head('Contact', 'Talk to us', 'Questions, problems or ideas 
 {chr(10).join(f'      <div class="card contact-card"{blk}>{tile(i, tone)}<h2 class="h4">{t}</h2>{body}{b}</div>' for i, tone, t, body, b, blk in contact_cards)}
     </div>
   </div>
+</section>
+
+<section class="section section-subtle" aria-labelledby="ct-which">
+  <div class="wrap">
+    <div class="prose">
+    <h2 id="ct-which">Which way to choose</h2>
+    <ul>
+      <li><b>Something not working</b> with installing, printing or billing: use the support form above, so all the details reach us in one place.</li>
+      <li data-block><b>A quick question</b> or help with installing: message us on <a data-whatsapp target="_blank" rel="noopener">WhatsApp</a>.</li>
+      <li><b>Anything longer</b>, or a message with files attached: email <a href="mailto:{EMAIL}">{EMAIL}</a>.</li>
+      <li data-block><b>Ideas and reviews</b>: use the <a data-href="forms.feedback" data-hide-empty target="_blank" rel="noopener">feedback form</a>. We publish a review only with your permission; <a href="reviews.html">read our customer review</a>.</li>
+      <li><b>A feature, report or bill format made for your business</b>: this is a paid service, quoted per request. The quote is free, and no work starts until you approve it. <a href="customization.html#request">Request a customization</a>.</li>
+    </ul>
+
+    <h2>What to include in a support request</h2>
+    <p>A few details help us find the problem quickly, often without having to ask you again:</p>
+    <ol>
+      <li>Your {NAME} version, shown in the app under <b>Settings → Software Info</b>. The latest version is <span data-version>{VERSION}</span>.</li>
+      <li>Your computer: Windows 10 or 11, your macOS version, or your Linux distribution and whether you installed the .deb or the AppImage.</li>
+      <li>What you were doing, step by step, and what you expected to happen.</li>
+      <li>The exact message you saw, or a screenshot of the screen.</li>
+      <li>For printing problems: the printer and the paper size (A4, A5, A6, or a 58 mm or 80 mm thermal roll).</li>
+    </ol>
+    <p>Your business data stays on your computer, so you do not need to send backups or customer lists; a screenshot of the
+      problem is usually enough. How we use what you send us is explained in the <a href="privacy.html">privacy policy</a>.</p>
+
+    <h2>Before you write</h2>
+    <p>Many questions are already answered in the <a href="faq.html">frequently asked questions</a>: price, offline use, GST,
+      printers, backups and moving to a new computer. If Windows or macOS warns you while installing, the
+      <a href="download.html">download page</a> has the steps for each system. Using an older version? See
+      <a href="changelog.html">what’s new in each release</a>; your problem may already be fixed in the latest one.</p>
+    </div>
+  </div>
 </section>'''
 
-page('contact.html', 'Contact',
-     f'Contact {BUSINESS} about {NAME}: email, WhatsApp, support requests and paid customization.',
-     'contact', contact_body)
+page('contact.html', 'Contact us: support, WhatsApp and customization',
+     f'Contact {BUSINESS} about {NAME} by email, WhatsApp or the support form. What to include in a support request, and '
+     'how to ask for paid customization.',
+     'contact', contact_body, crumb='Contact', page_type='ContactPage')
 
 # ───────────────────────────────── Updates ─────────────────────────────────
-changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release, newest first. Download the latest version from the <a href="download.html">Download page</a>.') + f'''
+MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+
+def date_tag(iso):
+    """A release date as a <time> element, e.g. 9 October 2026."""
+    return f'<time datetime="{iso}">{int(iso[8:])} {MONTHS[int(iso[5:7]) - 1]} {iso[:4]}</time>'
+
+
+changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release, newest first. Download the latest version from the '
+                           '<a href="download.html">Download page</a>; the FAQ explains <a href="faq.html#installing-and-updating">how to '
+                           'update without losing your data</a>.') + f'''
 
 <section class="page-body">
   <div class="wrap measure">
     <article class="release" id="v{VERSION}">
       <h2>Version {VERSION} {badge('Latest', 'brand')}</h2>
-      <p class="date">{RELEASE_DATE}</p>
+      <p class="date">{date_tag(RELEASE_ISO)}</p>
       <ul>
         <li><b>Low-stock limit for each product.</b> Until now every product counted as “low” at 10 or less. Now you can set your own limit on a product, for example 50 for rice and 2 for an expensive item. The Low Stock list, its count, and the colour and label in the product list all follow it. Leave it blank and a product works exactly as before.</li>
         <li>The limit is in the New Product and Edit forms and in the products CSV (a new <code>low_stock_limit</code> column), and Duplicate keeps it.</li>
@@ -1670,7 +1793,7 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
     </article>
     <article class="release" id="v1.0.6">
       <h2>Version 1.0.6</h2>
-      <p class="date">9 October 2026</p>
+      <p class="date">{date_tag("2026-10-09")}</p>
       <ul>
         <li><b>Tamil Settings screens read better.</b> PDF Settings, Invoice Settings, Company Info and Software Info now show the full Tamil words: the Reset to default button, template descriptions, and the notes under the invoice settings boxes are no longer cut off.</li>
         <li>Software Info shows the app description in Tamil, and the “Buy me a coffee” button reads clearly in Tamil.</li>
@@ -1679,7 +1802,7 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
     </article>
     <article class="release" id="v1.0.5">
       <h2>Version 1.0.5</h2>
-      <p class="date">9 October 2026</p>
+      <p class="date">{date_tag("2026-10-09")}</p>
       <ul>
         <li><b>Tamil screens read better.</b> Long Tamil labels are no longer cut off with “…”: the sidebar, page titles, dashboard cards and charts, the invoice, customer and product lists, and the Reports menu now show the full words.</li>
         <li>On the New Invoice screen, when the buttons are too narrow for their names, Create goes full width with Save Draft under it.</li>
@@ -1688,14 +1811,14 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
     </article>
     <article class="release" id="v1.0.4">
       <h2>Version 1.0.4</h2>
-      <p class="date">9 October 2026</p>
+      <p class="date">{date_tag("2026-10-09")}</p>
       <ul>
         <li>Anonymous usage counts are now on, so we can see how many shops use {NAME}: a short message when the app is first opened, once a day while it is used, and once when the first invoice is made. They never include your business data. Turn them off any time in Settings → Software Info (see the <a href="privacy.html">privacy policy</a>).</li>
       </ul>
     </article>
     <article class="release" id="v1.0.3">
       <h2>Version 1.0.3</h2>
-      <p class="date">9 October 2026</p>
+      <p class="date">{date_tag("2026-10-09")}</p>
       <ul>
         <li><b>Automatic backup.</b> Turn it on in Settings → Backup: every day or every week, while the app is open, a copy of your company’s data is saved by itself. Choose a folder inside Google Drive or OneDrive and the copies reach the cloud automatically.</li>
         <li>Keep the last 5, 10 or 30 automatic copies; older automatic copies are removed, and nothing else in the folder is touched.</li>
@@ -1705,12 +1828,12 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
     </article>
     <article class="release" id="v1.0.2">
       <h2>Version 1.0.2</h2>
-      <p class="date">8 October 2026</p>
+      <p class="date">{date_tag("2026-10-08")}</p>
       <p>The app is the same as version 1.0.1: there are no new features or fixes in this release. If you already have 1.0.1, you don’t need to update.</p>
     </article>
     <article class="release" id="v1.0.1">
       <h2>Version 1.0.1</h2>
-      <p class="date">8 October 2026</p>
+      <p class="date">{date_tag("2026-10-08")}</p>
       <p>Fixes and improvements from release testing.</p>
       <ul>
         <li>Stock can be a decimal number, so selling 0.5 kg takes exactly 0.5 from stock.</li>
@@ -1725,7 +1848,7 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
     </article>
     <article class="release" id="v1.0.0">
       <h2>Version 1.0.0</h2>
-      <p class="date">8 October 2026</p>
+      <p class="date">{date_tag("2026-10-08")}</p>
       <p>The first release under the {NAME} name.</p>
       <ul>
         <li>New name, logo and a clean light design.</li>
@@ -1742,12 +1865,13 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
   </div>
 </section>'''
 
-page('changelog.html', 'What’s new',
-     f'Release notes for {NAME}: what changed in each version.',
-     'changelog', changelog_body)
+page('changelog.html', 'What’s new: release notes and version history',
+     f'Release notes for {NAME}, the free billing software: what changed in each version from 1.0.0 to {VERSION}, with the '
+     'release dates.',
+     'changelog', changelog_body, crumb='What’s new')
 
 # ───────────────────────────────── Privacy ─────────────────────────────────
-privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {RELEASE_DATE}') + f'''
+privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {date_tag(RELEASE_ISO)}') + f'''
 
 <section class="page-body">
   <div class="wrap">
@@ -1756,8 +1880,8 @@ privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {RELEASE_DAT
 
     <h2>The {NAME} app</h2>
     <ul>
-      <li><b>Your business data stays on your computer.</b> The customers, products, invoices, payments, settings and backups you create are stored on the computer where {NAME} is installed. We do not receive a copy.</li>
-      <li><b>Anonymous usage counts.</b> So that we know how many people use {NAME}, the app (from version 1.0.4) sends us a short message when it is first opened, once a day while it is used, and once when the first invoice is created. Each message carries only a random ID made for this purpose, the app version and the operating system (Windows, macOS or Linux). It never includes your customers, products, invoices, amounts or company details. The messages go to a small server we run on Cloudflare, which does not store IP addresses; Cloudflare’s handling is described in the <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare Privacy Policy</a>. You can turn this off in the app under <b>Settings → Software Info</b>.</li>
+      <li><b>Your business data stays on your computer.</b> The customers, products, invoices, payments, settings and backups you create are stored on the computer where {NAME} is installed. We do not receive a copy. The FAQ explains <a href="faq.html#about-invoiceo">where your data is stored and how to back it up</a>.</li>
+      <li><b>Anonymous usage counts.</b> So that we know how many people use {NAME}, the app (from <a href="changelog.html#v1.0.4">version 1.0.4</a>) sends us a short message when it is first opened, once a day while it is used, and once when the first invoice is created. Each message carries only a random ID made for this purpose, the app version and the operating system (Windows, macOS or Linux). It never includes your customers, products, invoices, amounts or company details. The messages go to a small server we run on Cloudflare, which does not store IP addresses; Cloudflare’s handling is described in the <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare Privacy Policy</a>. You can turn this off in the app under <b>Settings → Software Info</b>.</li>
       <li><b>Update check.</b> Once a day, when you are online, the app asks GitHub whether a newer version of {NAME} exists; that is an ordinary web request, so GitHub sees your IP address. Apart from this and the usage counts, the app goes online only when you click a link that opens your web browser.</li>
       <li><b>No online account.</b> The app’s usernames and passwords exist only on your computer.</li>
       <li><b>No advertising</b> and no selling of data, ever.</li>
@@ -1787,7 +1911,7 @@ privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {RELEASE_DAT
     <p>{NAME} and this website are meant for businesses and are not aimed at children.</p>
 
     <h2>Changes</h2>
-    <p>If we change this policy, we will update this page and the date at the top.</p>
+    <p>If we change this policy, we will update this page and the date at the top. The <a href="terms.html">terms of use</a> cover the rest of how you may use {NAME} and this website.</p>
 
     <h2>Contact</h2>
     <p>{BUSINESS}, India · <a href="mailto:{EMAIL}">{EMAIL}</a></p>
@@ -1795,12 +1919,13 @@ privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {RELEASE_DAT
   </div>
 </section>'''
 
-page('privacy.html', 'Privacy policy',
-     f'How {BUSINESS} handles information for the {NAME} app and website. Your business data stays on your computer.',
-     'privacy', privacy_body)
+page('privacy.html', 'Privacy policy: business data stays on your PC',
+     f'How {BUSINESS} handles information for the {NAME} app and website. Your business data stays on your computer, and '
+     'anonymous usage counts can be turned off.',
+     'privacy', privacy_body, crumb='Privacy policy')
 
 # ────────────────────────────────── Terms ──────────────────────────────────
-terms_body = page_head('Legal', 'Terms of use', f'Last updated: {RELEASE_DATE}') + f'''
+terms_body = page_head('Legal', 'Terms of use', f'Last updated: {date_tag(RELEASE_ISO)}') + f'''
 
 <section class="page-body">
   <div class="wrap">
@@ -1808,10 +1933,10 @@ terms_body = page_head('Legal', 'Terms of use', f'Last updated: {RELEASE_DATE}')
     <p>These terms apply to the {NAME} app and to this website, which are provided by {BUSINESS} (“we”). By downloading or using {NAME}, you agree to them.</p>
 
     <h2>1. Using {NAME}</h2>
-    <p>You may download, install and use {NAME} free of charge, for personal or business use, on as many of your computers as you like. You may share the link to our Download page. You may not sell {NAME}, charge others for copies of it, or present it as your own product.</p>
+    <p>You may download, install and use {NAME} free of charge, for personal or business use, on as many of your computers as you like. You may share the link to our <a href="download.html">Download page</a>. You may not sell {NAME}, charge others for copies of it, or present it as your own product.</p>
 
     <h2>2. Your data and your invoices</h2>
-    <p>{NAME} stores your data on your own computer. You are responsible for keeping backups, for the details you enter, and for checking that your invoices, tax rates and returns are correct for your business. {NAME} is a tool to help you prepare invoices; it is not tax or legal advice.</p>
+    <p>{NAME} stores your data on your own computer. You are responsible for keeping backups, for the details you enter, and for checking that your invoices, tax rates and returns are correct for your business. {NAME} is a tool to help you prepare invoices; it is not tax or legal advice. How we handle information is explained in the <a href="privacy.html">privacy policy</a>.</p>
 
     <h2>3. No warranty</h2>
     <p>{NAME} is provided “as is”, without any warranty. We work to keep it reliable, but we cannot promise that it will be free of errors or suitable for every purpose.</p>
@@ -1820,7 +1945,7 @@ terms_body = page_head('Legal', 'Terms of use', f'Last updated: {RELEASE_DATE}')
     <p>To the extent the law allows, we are not liable for any loss of data, profit or business, or for any indirect damage, arising from the use of {NAME} or this website. Where liability cannot be excluded, it is limited to the amount you paid us for the work concerned.</p>
 
     <h2>5. Paid customization</h2>
-    <p>Custom features and changes are a separate, paid service. For each request we agree in writing on what will be delivered, the price, the payment terms and an expected timeline before any work starts. Delivery dates are estimates. Work we deliver for you comes with the same terms as the rest of {NAME} unless we agree otherwise in writing.</p>
+    <p>Custom features and changes are a separate, paid service. For each request we agree in writing on what will be delivered, the price, the payment terms and an expected timeline before any work starts. Delivery dates are estimates. Work we deliver for you comes with the same terms as the rest of {NAME} unless we agree otherwise in writing. See <a href="customization.html">how custom work is requested and quoted</a>.</p>
 
     <h2>6. Third-party software</h2>
     <p>{NAME} is built on Invoiso, which is released under the MIT License. The licence text and other notices are on the <a href="licenses.html">Licenses page</a>. Those licences apply to the parts they cover.</p>
@@ -1840,9 +1965,10 @@ terms_body = page_head('Legal', 'Terms of use', f'Last updated: {RELEASE_DATE}')
   </div>
 </section>'''
 
-page('terms.html', 'Terms of use',
-     f'Terms for using the free {NAME} app, this website and paid customization from {BUSINESS}.',
-     'terms', terms_body)
+page('terms.html', 'Terms of use for the free billing app and website',
+     f'Terms for the free {NAME} billing app and this website, and for paid customization from {BUSINESS}: your '
+     'data, no warranty, liability and Indian law.',
+     'terms', terms_body, crumb='Terms of use')
 
 # ───────────────────────────────── Licenses ────────────────────────────────
 mit = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'LICENSE'), encoding='utf-8').read().strip()
@@ -1856,19 +1982,35 @@ licenses_body = page_head('Legal', 'Licenses',
     <p>{NAME} is based on Invoiso by ANOOP P, released under the MIT License:</p>
     <pre>{html.escape(mit)}</pre>
 
+    <h2>What the MIT License means</h2>
+    <p>The MIT License is a short, permissive open-source licence. In plain words:</p>
+    <ul>
+      <li><b>It allows</b> anyone to use, copy, change and share the software, for personal or business use, free of charge. The licence text above lists every permission.</li>
+      <li><b>It asks one thing:</b> the copyright notice and the licence text must stay with every copy or substantial part of the software. That is why the Invoiso notice, © 2025 ANOOP P, is on this page, at the foot of every page of this website and on the Software Info screen of the app.</li>
+      <li><b>It gives no warranty:</b> the software is provided “as is”, and its authors are not liable for problems that come from using it. Our <a href="terms.html">terms of use</a> say the same for {NAME}.</li>
+    </ul>
+
+    <h2>How {NAME} relates to Invoiso</h2>
+    <p>{NAME} is built on Invoiso, an open-source invoicing app by ANOOP P. {BUSINESS} develops {NAME} from that code and releases it under the MIT License as well. Version 1.0.0 was the first release under the {NAME} name; the <a href="changelog.html">release notes</a> list what has changed in each version since then.</p>
+
+    <h2>Other licences in the app</h2>
+    <p>The app also includes open-source packages and fonts, each under its own licence. To read them, open <b>Settings → Software Info</b> in {NAME} and choose <b>View licenses</b>. The same screen shows your app version and the Invoiso notice.</p>
+
     <h2>This website</h2>
     <ul>
       <li><b>Feather icons</b>, released under the MIT License, © 2013–2017 Cole Bemis.</li>
       <li><b>Platform logos</b> (Windows, Apple, Linux) from Simple Icons, released under CC0 1.0. The logos are trademarks of their owners.</li>
       <li><b>Manrope</b> typeface by Mikhail Sharanda, released under the SIL Open Font License 1.1, served by Google Fonts.</li>
     </ul>
+    <p>Questions about licences? Write to <a href="mailto:{EMAIL}">{EMAIL}</a>, or see the other ways to <a href="contact.html">contact us</a>.</p>
     </div>
   </div>
 </section>'''
 
-page('licenses.html', 'Licenses',
-     f'Licences for software that {NAME} includes.',
-     'licenses', licenses_body)
+page('licenses.html', 'Licenses: MIT License and open-source credits',
+     f'Licences for {NAME}: the MIT License of Invoiso by ANOOP P that it is built on, what that licence allows, and credits '
+     'for this website’s icons and fonts.',
+     'licenses', licenses_body, crumb='Licenses')
 
 # ─────────────────────────────────── 404 ───────────────────────────────────
 nf_body = f'''<section class="wrap not-found">
@@ -1891,7 +2033,7 @@ pages = ['', 'ta.html', 'hi.html', 'download.html', 'customization.html', 'revie
 with open(os.path.join(OUT, 'sitemap.xml'), 'w') as f:
     f.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n')
     for p in pages:
-        f.write(f'  <url><loc>{SITE}/{p}</loc><lastmod>{RELEASE_ISO}</lastmod></url>\n')
+        f.write(f'  <url><loc>{SITE}/{p}</loc><lastmod>{PAGE_MODIFIED[p or "index.html"]}</lastmod></url>\n')
     f.write('</urlset>\n')
 
 with open(os.path.join(OUT, 'robots.txt'), 'w') as f:
@@ -1901,6 +2043,10 @@ with open(os.path.join(OUT, 'llms.txt'), 'w') as f:
     f.write(f'''# {NAME}
 
 > {NAME} is free, open-source (MIT) offline billing and GST invoice software for Windows, macOS and Linux, made by {BUSINESS} (India). It creates invoices, quotations and payment receipts, prints on A4/A5/A6 paper or 58/80 mm thermal printers, and works in English, Tamil, Hindi, Nepali, French, Spanish, Chinese and Tibetan (partly translated). All business data is stored on the user's own computer. The app is free with no subscription; custom features are a paid service quoted per request.
+
+## Full text
+
+- [llms-full.txt]({SITE}/llms-full.txt): the site's main text in one Markdown file: features, install steps for each system, every FAQ answer, privacy, terms of use, customization, contact, release notes and licences
 
 ## Pages
 
@@ -1913,6 +2059,9 @@ with open(os.path.join(OUT, 'llms.txt'), 'w') as f:
 - [FAQ]({SITE}/faq.html): price, open source, offline use, data storage, GST, printers, languages
 - [What's new]({SITE}/changelog.html): release notes
 - [Contact]({SITE}/contact.html): email {EMAIL}
+- [Privacy policy]({SITE}/privacy.html): what the app and website handle; business data stays on the user's computer
+- [Terms of use]({SITE}/terms.html): terms for the app, the website and paid customization
+- [Licenses]({SITE}/licenses.html): MIT License of Invoiso by ANOOP P, and website credits
 
 ## Key facts
 
@@ -1924,6 +2073,127 @@ with open(os.path.join(OUT, 'llms.txt'), 'w') as f:
 - Current version: {VERSION} ({RELEASE_DATE})
 - Based on Invoiso by ANOOP P (MIT License)
 ''')
+
+# llms-full.txt: the whole site as one Markdown file for AI assistants, built
+# from the same data and page text as the HTML above (no facts of its own).
+# Page text that points at its place on the page, reworded for a file read on its own.
+MD_PHRASES = {
+    'Pick your computer above.': f'Pick your computer on the download page ({SITE}/download.html).',
+    'Fill in the request form below.': f'Fill in the request form at {SITE}/customization.html#request.',
+}
+
+
+def md(s, page=None):
+    """Page HTML to Markdown: links made absolute, bold and code kept, the rest plain text.
+    page: the file the text comes from, so its in-page #anchor links can be made absolute."""
+    for old, new in MD_PHRASES.items():
+        s = s.replace(old, new)
+
+    def link(m):
+        href, text = m.group(1), m.group(2)
+        if href is None or (href.startswith('#') and not page):
+            return text
+        if href.startswith('#'):
+            href = page + href
+        if not href.startswith(('http:', 'https:', 'mailto:')):
+            if href.startswith('index.html'):
+                href = href[len('index.html'):]
+            href = SITE + '/' + href
+        return f'[{text}]({href})'
+    s = re.sub(r'<a\b(?:[^>]*?\bhref="([^"]*)")?[^>]*>(.*?)</a>', link, s, flags=re.S)
+    s = re.sub(r'</?(b|strong)>', '**', s)
+    s = re.sub(r'</?code>', '`', s)
+    s = html.unescape(strip_tags(s))
+    return re.sub(r'\s+', ' ', s).strip()
+
+
+def first(pattern, text):
+    return md(re.search(pattern, text, re.S).group(1))
+
+
+full = [f'# {NAME}: full description',
+        '',
+        f'> {NAME} is free, open-source (MIT) offline billing and GST invoice software for Windows, macOS and Linux, made by '
+        f'{BUSINESS} (India). This file collects the main text of {SITE}/ in one place, for AI assistants and other readers.',
+        '',
+        f'- Current version: {VERSION}, released {RELEASE_DATE} ({RELEASE_ISO})',
+        f'- Made by: {BUSINESS}, India',
+        f'- Website: {SITE}/ (also in Tamil: {SITE}/ta.html, and Hindi: {SITE}/hi.html)',
+        f'- Price: free, with no subscription, trial or paid tier; custom features are a paid service, quoted per request',
+        f'- Licence: MIT License. Built on Invoiso by ANOOP P (MIT License, © 2025 ANOOP P)',
+        '',
+        f'## What {NAME} is',
+        '',
+        first(r'<h1[^>]*>(.*?)</h1>', hero) + '. ' + first(r'<p class="lead">(.*?)</p>', hero),
+        '',
+        f'## Why {NAME}',
+        '']
+full += [f'- **{md(t)}**: {md(d)}' for _, t, d in WHY]
+full += ['', '## How it works', '']
+full += [f'{int(n)}. **{md(t)}**: {md(b)}' for n, t, b in HOW]
+full += ['', '## Features', '']
+for _, t, items, _ in GROUPS:
+    full += [f'### {md(t)}', ''] + [f'- {md(i)}' for i in items] + ['']
+full += ['## Who it is for', '']
+full += [f'- **{md(t)}**: {md(d)}' for _, t, d in WHO]
+full += ['', '## Made for India, works anywhere', ''] + [f'- {md(i)}' for i in INDIA + WORLD]
+full += ['', 'App languages: English, Tamil, Hindi, Nepali, French, Spanish, Chinese and Tibetan (partly translated).']
+full += ['', '## Screens', ''] + [f'- **{md(t)}**: {md(c)}' for _, t, c in screen_cards]
+full += ['', '## Download and install', '',
+         f'Download page: {SITE}/download.html. Every installer is free, with no sign-up, no licence key and no subscription. '
+         f'SHA-256 checksums are linked on the download page.', '']
+for p in PLATFORMS:
+    full += [f'### {p["name"]}', '', f'- Requirements: {md(p["req"])}',
+             '- Files: ' + ', '.join(f for _, f in p['files']) + f' ({SITE}/download.html#{p["anchor"]})', '- Steps:']
+    full += [f'  {i + 1}. {md(st)}' for i, st in enumerate(p['steps'])] + ['']
+full += ['### First steps', ''] + [f'{i + 1}. **{t}**: {md(b)}' for i, (_, t, b) in enumerate(FIRST_STEPS)]
+full += ['', '### Updating to a new version', '', first(r'Updating to a new version</h2><p>(.*?)</p>', download_body)]
+full += ['', '## Frequently asked questions', '']
+for t, items in FAQ_GROUPS:
+    full += [f'### {md(t)}', '']
+    for q, a in items:
+        full += [f'**{md(q)}**', '', ' '.join(md(x) for x in (a if isinstance(a, list) else [a])), '']
+full += ['## Privacy', '', first(r'<p class="lead">(.*?)</p>', privacy), '',
+         f'Summary of the privacy policy ({SITE}/privacy.html):', '']
+for h, ul in re.findall(r'<h2>(.*?)</h2>\s*<ul>(.*?)</ul>', privacy_body, re.S):
+    full += [f'### {md(h)}', ''] + [f'- {md(li)}' for li in re.findall(r'<li>(.*?)</li>', ul, re.S)] + ['']
+full += ['## Terms of use (summary)', '', f'Full terms: {SITE}/terms.html', '']
+for h, para in re.findall(r'<h2>(.*?)</h2>\s*<p>(.*?)</p>', terms_body, re.S):
+    full += [f'### {md(h)}', '', md(para), '']
+full += ['## Customization (paid, quoted per request)', '',
+         f'{NAME} is free to use. When a business needs something more, {BUSINESS} can build it. Every request is quoted on its '
+         'own, and the customer decides before any work starts. Prices depend on the work, so no fixed prices are listed. '
+         f'Request form: {SITE}/customization.html#request', '', 'Examples of what can be made:', '']
+full += [f'- **{md(t)}**: {md(d, "customization.html")}' for _, t, d in CUSTOM]
+full += ['', 'How it works:', ''] + [f'{i + 1}. **{t}**: {md(b)}' for i, (_, t, b) in enumerate(CUSTOM_STEPS)]
+full += ['', '### Recent work: an energy bill for a solar power company', '',
+         'Made for Green & Green Agri Solutions, Udumalai: their monthly power-sale bill for wind and solar generation, built '
+         f'into {NAME}. It shows (sample images use made-up names and numbers):', '']
+full += [f'- {md(i)}' for i in ENERGY_WORK]
+full += ['', '## Customer reviews', '',
+         f'Real customers only, shown with their permission, in words they have approved ({SITE}/reviews.html).', '']
+for t in TESTIMONIALS:
+    full += [f'> {md(t["quote"]["en"])}', '>', f'> — {md(t["name"])}, {md(t["about"]["en"])} ({md(t["tag"]["en"])})', '']
+full += ['## Contact', '',
+         f'- Email: {EMAIL}',
+         f'- WhatsApp, the support form, the feedback form and the customization request form are linked from {SITE}/contact.html',
+         f'- Support requests help most with: the app version (Settings → Software Info), the operating system, the steps that '
+         'led to the problem, the exact message or a screenshot, and for printing problems the printer and paper size',
+         '', '## Release notes', '', f'Every release, newest first ({SITE}/changelog.html).', '']
+for ver, art in re.findall(r'<article class="release" id="v([\d.]+)">(.*?)</article>', changelog_body, re.S):
+    date = re.search(r'<time datetime="([\d-]+)">(.*?)</time>', art)
+    full += [f'### Version {ver} ({date.group(2)}, {date.group(1)})', '']
+    full += [md(x) for x in re.findall(r'<p>(.*?)</p>', art, re.S)]
+    full += [f'- {md(li)}' for li in re.findall(r'<li>(.*?)</li>', art, re.S)] + ['']
+full += ['## License and credits', '',
+         f'{NAME} is released under the MIT License. It is built on Invoiso by ANOOP P, released under the MIT License, '
+         '© 2025 ANOOP P. The licences of the open-source packages and fonts built into the app are listed in the app under '
+         f'Settings → Software Info → View licenses. Full licence text: {SITE}/licenses.html', '',
+         'Credits for this website:', '']
+full += [f'- {md(li)}' for li in re.findall(r'<h2>This website</h2>\s*<ul>(.*?)</ul>', licenses_body, re.S)[0].split('</li>') if li.strip()]
+full += ['']
+with open(os.path.join(OUT, 'llms-full.txt'), 'w', encoding='utf-8') as f:
+    f.write('\n'.join(full))
 
 with open(os.path.join(OUT, 'site.webmanifest'), 'w') as f:
     json.dump({
