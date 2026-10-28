@@ -54,8 +54,11 @@ RELEASE_DATE_TA = f'{int(RELEASE_ISO[8:])} {TA_MONTHS[int(RELEASE_ISO[5:7]) - 1]
 RELEASE_DATE_HI = f'{int(RELEASE_ISO[8:])} {HI_MONTHS[int(RELEASE_ISO[5:7]) - 1]} {RELEASE_ISO[:4]}'
 # The home page in each language; they point at each other with hreflang.
 HOMES = {'en': 'index.html', 'ta': 'ta.html', 'hi': 'hi.html'}
+# Where links to a home page point. The English home is the site root, so visits are not split
+# between / and /index.html (Google Analytics counts them as two pages).
+HOME_HREF = {'en': '/', 'ta': 'ta.html', 'hi': 'hi.html'}
 # (href, hreflang, label, title) of the header's language links.
-LANG_LINKS = {'en': ('index.html', 'English', 'Read in English'), 'ta': ('ta.html', 'தமிழ்', 'தமிழில் படிக்க'),
+LANG_LINKS = {'en': ('/', 'English', 'Read in English'), 'ta': ('ta.html', 'தமிழ்', 'தமிழில் படிக்க'),
               'hi': ('hi.html', 'हिन्दी', 'हिन्दी में पढ़ें')}
 
 # Icons: Feather (MIT, © Cole Bemis) and platform marks from Simple Icons (CC0). See licenses.html.
@@ -401,7 +404,7 @@ def first_steps(level='h3', steps=FIRST_STEPS, word='Step'):
 
 # ─────────────────────────────── Page frame ────────────────────────────────
 def header(active, home=False, base=False, lang='en'):
-    pre = '' if home else 'index.html'
+    pre = '' if home else '/'
     if lang == 'hi':
         links = [('सुविधाएं', '#features', 'features'), ('कैसे काम करता है', '#how-it-works', 'how'),
                  ('सवाल', '#faq', 'faq'), ('संपर्क', 'contact.html', 'contact')]
@@ -433,7 +436,7 @@ def header(active, home=False, base=False, lang='en'):
     skip = '' if base else f'<a class="skip-link" href="#main">{words["skip"]}</a>\n'
     return f'''{skip}<header class="site-header">
   <div class="wrap">
-    <a class="brand" href="{HOMES[lang]}" aria-label="{words['home']}"><img src="assets/images/logo.png" alt="{NAME}" width="196" height="68"></a>
+    <a class="brand" href="{HOME_HREF[lang]}" aria-label="{words['home']}"><img src="assets/images/logo.png" alt="{NAME}" width="196" height="68"></a>
     <nav class="nav" aria-label="{words['main']}">{nav}</nav>
     <div class="header-actions">
       {switch}
@@ -446,7 +449,7 @@ def header(active, home=False, base=False, lang='en'):
 
 
 def footer(home=False, lang='en'):
-    pre = '' if home else 'index.html'
+    pre = '' if home else '/'
     col = lambda title, items: (f'<div><h2>{title}</h2><ul>' + ''.join(f'<li{" data-block" if "data-" in a else ""}><a {a}>{t}</a></li>' for t, a in items)
                                 + '</ul></div>')
     support = 'data-href="forms.support" data-hide-empty target="_blank" rel="noopener"'
@@ -801,9 +804,9 @@ ENERGY_WORK = [
 # Recent custom work, second example: sales and purchase on one bill. The picture
 # is the real receipt printing code with a made-up shop and customer (never a
 # customer's real bill). The customer is named only once they agree
-# (AMMA_NAMED); until then the page says "a farm-produce shop in Tamil Nadu".
+# (AMMA_NAMED); until then the page says "a farm-products shop in Tamil Nadu".
 AMMA_NAMED = False
-AMMA_WHO = 'Amma Organics, Mannargudi' if AMMA_NAMED else 'a farm-produce shop in Tamil Nadu'
+AMMA_WHO = 'Amma Organics, Mannargudi' if AMMA_NAMED else 'a farm-products shop in Tamil Nadu'
 _amma_png = 'assets/images/docs/receipt-sale-purchase.png'
 _aw, _ah = png_size(os.path.join(OUT, _amma_png))
 AMMA_WORK = [
@@ -1562,7 +1565,7 @@ customization_body = page_head(
 <section class="page-body" aria-labelledby="what-title">
   <div class="wrap">
     {section_head('What we can make', 'Made for your business', 'A few examples. If your idea is not on the list, ask anyway. '
-                  'Everything already in the app stays free: see <a href="index.html#features">the features of the free version</a> first.', 'what-title')}
+                  'Everything already in the app stays free: see <a href="/#features">the features of the free version</a> first.', 'what-title')}
     <div class="grid-auto mt-4">{''.join(f'<div class="card">{tile(i, "neutral")}<h3>{t}</h3><p>{d}</p></div>' for i, t, d in CUSTOM)}</div>
   </div>
 </section>
@@ -1630,7 +1633,7 @@ FAQ_GROUPS = [
          'Yes. A USB barcode scanner that types the code works on the New Invoice screen: scan a product to add it to the bill.'),
         ('Is it right for a small shop?',
          'Yes. Barcode scanning, thermal receipts, stock levels, batch and expiry dates, and daily sales reports are built in. '
-         'See <a href="index.html#features">all the features</a>.'),
+         'See <a href="/#features">all the features</a>.'),
         ('Can I manage more than one business?',
          'Yes. You can add several companies on one computer. Each company keeps its own customers, products, invoices and settings.'),
         ('Can more than one person use it?',
@@ -1689,7 +1692,7 @@ reviews_body = page_head('Reviews', 'What our customers say',
       <div class="stack" style="gap: 10px">
         <p>{badge('Custom feature', 'brand', 'tool')}</p>
         <h2 class="h3" id="rv-amma">Sales and purchase on one bill, built for {AMMA_WHO}</h2>
-        <p>The shop sells to its customers and also buys produce from them. One bill now shows both, with the grand total worked out for the counter.</p>
+        <p>The shop sells to its customers and also buys farm products from them, such as groundnuts or coconut. One bill now shows both. The final total shows what the customer pays, or what the shop pays the customer when it buys more than it sells.</p>
       </div>
       <figure class="doc-full doc-narrow"><a href="{_amma_png}" target="_blank" rel="noopener" title="Open full size"><img src="{_amma_png}" width="{_aw}" height="{_ah}" alt="A sample thermal receipt made with {NAME}: items sold to the customer, items bought from the customer, and the grand total as sales minus purchase" loading="lazy" decoding="async"></a>
         <figcaption>Shown with sample data: every name and number on it is made up.</figcaption></figure>
@@ -2081,7 +2084,7 @@ nf_body = f'''<section class="wrap not-found">
   <h1 class="h2">This page could not be found</h1>
   <p class="lead">The link may be old, or the page may have moved.</p>
   <div class="cta-row" style="justify-content: center">
-    {btn('Go to the home page', 'index.html', 'primary', 'lg')}
+    {btn('Go to the home page', '/', 'primary', 'lg')}
     {btn(f'Download {NAME}', 'download.html', 'secondary', 'lg', 'download')}
   </div>
 </section>'''
@@ -2161,7 +2164,7 @@ def md(s, page=None):
         if not href.startswith(('http:', 'https:', 'mailto:')):
             if href.startswith('index.html'):
                 href = href[len('index.html'):]
-            href = SITE + '/' + href
+            href = SITE + (href if href.startswith('/') else '/' + href)
         return f'[{text}]({href})'
     s = re.sub(r'<a\b(?:[^>]*?\bhref="([^"]*)")?[^>]*>(.*?)</a>', link, s, flags=re.S)
     s = re.sub(r'</?(b|strong)>', '**', s)
