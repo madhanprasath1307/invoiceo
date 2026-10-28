@@ -22,14 +22,14 @@ SITE = 'https://invoiceo.in'
 NAME = 'Invoiceo'
 BUSINESS = 'Madcreations'
 EMAIL = 'madhanprasat2002r@gmail.com'
-VERSION = '1.0.7'
-RELEASE_DATE = '23 October 2026'
-RELEASE_ISO = '2026-10-23'
+VERSION = '1.0.8'
+RELEASE_DATE = '28 October 2026'
+RELEASE_ISO = '2026-10-28'
 # When the website's own text last changed. Set it to the publish date whenever
 # page content changes between app releases; pages use the later of this and
 # RELEASE_ISO as their dateModified and sitemap <lastmod>. PAGE_UPDATED can give
 # a single page its own date. Privacy/terms keep their policy date (RELEASE_ISO).
-SITE_UPDATED_ISO = '2026-10-27'
+SITE_UPDATED_ISO = '2026-10-28'
 PAGE_UPDATED = {}
 PAGE_MODIFIED = {}  # filled by page(): filename -> dateModified, reused by the sitemap
 COFFEE = 'https://buymeacoffee.com/madcreations'
@@ -1837,6 +1837,15 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
     <article class="release" id="v{VERSION}">
       <h2>Version {VERSION} {badge('Latest', 'brand')}</h2>
       <p class="date">{date_tag(RELEASE_ISO)}</p>
+      <ul>
+        <li><b>Easier sign-in.</b> Click the arrow in the Username box to pick your account from a list, and {NAME} remembers who signed in last on that computer, so you only type the password.</li>
+        <li><b>Letter case no longer matters.</b> “ravi”, “Ravi” and “RAVI” open the same account. Your username can be any name you can remember, including your email address. Two older accounts that differ only by case (for example “Bob” and “bob”) still need the exact spelling, and a new account can no longer be made with a name that differs from an existing one only by case.</li>
+        <li>Your data and accounts are unchanged: this release needs no database upgrade.</li>
+      </ul>
+    </article>
+    <article class="release" id="v1.0.7">
+      <h2>Version 1.0.7</h2>
+      <p class="date">{date_tag("2026-10-23")}</p>
       <ul>
         <li><b>Low-stock limit for each product.</b> Until now every product counted as “low” at 10 or less. Now you can set your own limit on a product, for example 50 for rice and 2 for an expensive item. The Low Stock list, its count, and the colour and label in the product list all follow it. Leave it blank and a product works exactly as before.</li>
         <li>The limit is in the New Product and Edit forms and in the products CSV (a new <code>low_stock_limit</code> column), and Duplicate keeps it.</li>
