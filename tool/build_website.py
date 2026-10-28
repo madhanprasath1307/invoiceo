@@ -798,6 +798,24 @@ ENERGY_WORK = [
     'Saved like any invoice, so payments, balances and reports work as usual',
 ]
 
+# Recent custom work, second example: sales and purchase on one bill. The picture
+# is the real receipt printing code with a made-up shop and customer (never a
+# customer's real bill). The customer is named only once they agree
+# (AMMA_NAMED); until then the page says "a farm-produce shop in Tamil Nadu".
+AMMA_NAMED = False
+AMMA_WHO = 'Amma Organics, Mannargudi' if AMMA_NAMED else 'a farm-produce shop in Tamil Nadu'
+_amma_png = 'assets/images/docs/receipt-sale-purchase.png'
+_aw, _ah = png_size(os.path.join(OUT, _amma_png))
+AMMA_WORK = [
+    'Sale and Purchase items on the same bill: the shop sells to the customer and also buys from the same customer',
+    'Purchase items use the product’s buying price, and the rate can be changed on the bill',
+    'Grand Total = Sales − Purchase, shown as “Pay customer” when the shop owes the customer',
+    'Stock goes down on a sale and up on a purchase, and is corrected if a bill is edited or deleted',
+    'Receipt for 58 mm and 80 mm thermal printers, with a SALES and a PURCHASE section',
+    'No GST on the bill, and it works with the products already in the app',
+]
+
+
 def paper(name, cls, alt):
     src = f'assets/images/docs/{name}.png'
     w, h = png_size(os.path.join(OUT, src))
@@ -1521,6 +1539,22 @@ recent_work = f'''<section class="section" id="work" aria-labelledby="work-title
   </div>
 </section>'''
 
+recent_work_2 = f'''<section class="section section-subtle" id="work-sales-purchase" aria-labelledby="work2-title">
+  <div class="wrap">
+    {section_head('Recent work', 'Sales and purchase on one bill', 'Made for ' + AMMA_WHO + ': the shop sells to a customer and buys from the same customer, on one bill.', 'work2-title')}
+    <div class="split split-top mt-4">
+      <figure class="doc-full doc-narrow">
+        <a href="{_amma_png}" target="_blank" rel="noopener" title="Open full size"><img src="{_amma_png}" width="{_aw}" height="{_ah}" alt="A sales and purchase receipt printed by {NAME} on an 80 mm thermal printer: items sold, items bought from the customer and the grand total" loading="lazy" decoding="async"></a>
+        <figcaption>Shown with sample data: every name and number on it is made up.</figcaption>
+      </figure>
+      <div class="stack" style="gap: 28px">
+        <div class="stack"><h3 class="h4">What it does</h3>{checks(AMMA_WORK)}</div>
+        <p class="small">It is a paid custom version of {NAME}, made for that shop. See <a href="reviews.html#sales-purchase">it on the Reviews page</a>, or <a href="#request">ask for something like it</a>.</p>
+      </div>
+    </div>
+  </div>
+</section>'''
+
 customization_body = page_head(
     'Custom features', 'Customization',
     f'{NAME} is free to use. When your business needs something more, we can build it for you. Every request is quoted on its own, and you decide before any work starts.') + f'''
@@ -1534,6 +1568,8 @@ customization_body = page_head(
 </section>
 
 {recent_work}
+
+{recent_work_2}
 
 <section class="section section-subtle" aria-labelledby="custom-how">
   <div class="wrap">
@@ -1647,6 +1683,22 @@ reviews_body = page_head('Reviews', 'What our customers say',
   </div>
 </section>
 
+<section class="section" aria-labelledby="rv-amma" id="sales-purchase">
+  <div class="wrap">
+    <div class="review-story stack">
+      <div class="stack" style="gap: 10px">
+        <p>{badge('Custom feature', 'brand', 'tool')}</p>
+        <h2 class="h3" id="rv-amma">Sales and purchase on one bill, built for {AMMA_WHO}</h2>
+        <p>The shop sells to its customers and also buys produce from them. One bill now shows both, with the grand total worked out for the counter.</p>
+      </div>
+      <figure class="doc-full doc-narrow"><a href="{_amma_png}" target="_blank" rel="noopener" title="Open full size"><img src="{_amma_png}" width="{_aw}" height="{_ah}" alt="A sample thermal receipt made with {NAME}: items sold to the customer, items bought from the customer, and the grand total as sales minus purchase" loading="lazy" decoding="async"></a>
+        <figcaption>Shown with sample data: every name and number on it is made up.</figcaption></figure>
+      <div class="card stack"><h3 class="h4">What this bill does</h3>{checks(AMMA_WORK)}</div>
+      <p class="center">{btn('See this and other custom work', 'customization.html#work-sales-purchase', 'secondary', '', 'arrow')}</p>
+    </div>
+  </div>
+</section>
+
 <section class="section section-subtle" aria-labelledby="rv-about">
   <div class="wrap">
     <div class="prose" style="margin: 0 auto">
@@ -1654,6 +1706,8 @@ reviews_body = page_head('Reviews', 'What our customers say',
     <p>Green &amp; Green Agri Solutions, in Udumalai, works in agricultural products and solar power. Each month they bill for the
       wind and solar power they generate, and that bill has its own rules: units, a monthly rate and a list of deductions that
       an ordinary invoice does not have. We built the bill into {NAME} for them as a paid customization.</p>
+    <p>The sales-and-purchase bill was made for {AMMA_WHO}, as a paid customization too: it is delivered as a private
+      version of {NAME} made for that shop, and it is not part of the free app.</p>
     <p>If your trade needs a bill of its own, see <a href="customization.html">custom bill formats
       and features</a>. Every request is quoted on its own, and you decide before any work starts.</p>
 
@@ -1686,8 +1740,8 @@ reviews_body = page_head('Reviews', 'What our customers say',
 </section>'''
 
 page('reviews.html', 'Customer reviews and custom billing work',
-     f'What a customer says about {NAME}, the free billing software, and the custom energy bill we built for a solar power '
-     'company in Udumalai.',
+     f'What a customer says about {NAME}, plus the custom bills we built: an energy bill for a solar power company and a '
+     'sales-and-purchase bill for a farm shop.',
      'reviews', reviews_body, crumb='Customer reviews')
 
 page('faq.html', 'FAQ: free offline GST billing software',
@@ -2170,6 +2224,10 @@ full += ['', '### Recent work: an energy bill for a solar power company', '',
          'Made for Green & Green Agri Solutions, Udumalai: their monthly power-sale bill for wind and solar generation, built '
          f'into {NAME}. It shows (sample images use made-up names and numbers):', '']
 full += [f'- {md(i)}' for i in ENERGY_WORK]
+full += ['', f'### Recent work: sales and purchase on one bill, for {AMMA_WHO}', '',
+         'The shop sells to a customer and also buys from the same customer, on one bill. A private version of '
+         f'{NAME} made for that shop, not part of the free app. It shows (sample images use made-up names and numbers):', '']
+full += [f'- {md(i)}' for i in AMMA_WORK]
 full += ['', '## Customer reviews', '',
          f'Real customers only, shown with their permission, in words they have approved ({SITE}/reviews.html).', '']
 for t in TESTIMONIALS:
