@@ -105,6 +105,7 @@ enum SettingKey {
   pdfTableHeaderFontSize, // PdfFontSize key for the items table header; empty/absent = same as pdfFontSize
   pdfTableItemsFontSize, // PdfFontSize key for the items table rows; empty/absent = same as pdfFontSize
   pdfTotalsFontSize, // PdfFontSize key for the totals block; empty/absent = same as pdfFontSize
+  lastLoginUsername, // username that last signed in on this computer; pre-fills the Login screen
 }
 
 extension SettingKeyExtension on SettingKey {
@@ -322,7 +323,8 @@ extension SettingKeyExtension on SettingKey {
         return 'pdf_table_items_font_size';
       case SettingKey.pdfTotalsFontSize:
         return 'pdf_totals_font_size';
-
+      case SettingKey.lastLoginUsername:
+        return 'last_login_username';
     }
   }
 }

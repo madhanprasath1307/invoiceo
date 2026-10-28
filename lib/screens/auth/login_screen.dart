@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:invoiceo/common/app_config.dart';
 import 'package:invoiceo/common/constants.dart';
+import 'package:invoiceo/common/setting_key.dart';
 import 'package:invoiceo/database/company_registry_service.dart';
 import 'package:invoiceo/l10n/app_localizations.dart';
 import 'package:invoiceo/models/company_profile.dart';
@@ -35,17 +36,47 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _passwordFocus = FocusNode();
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _showDefaultCredsHint = false;
   List<CompanyProfile> _companies = [];
   String? _activeCompanyId;
+  // The active company's accounts, for the Username drop-down.
+  List<String> _usernames = [];
 
   @override
   void initState() {
     super.initState();
     _loadCompanies();
-    _checkFirstTimeUser();
+    _checkFirstTimeUser().then((_) => _loadUsernames());
+  }
+
+  /// The active company's accounts, for the Username drop-down, and the user
+  /// who signed in last on this computer, pre-filled so only the password is
+  /// left to type. Skipped for the cloud edition (it signs in by email) and
+  /// when the first-run hint already filled in admin/admin.
+  Future<void> _loadUsernames() async {
+    if (ref.read(appEditionConfigProvider).isCloud) return;
+    var names = <String>[];
+    String? last;
+    try {
+      names = (await ref.read(authRepositoryProvider).getAllUsers())
+          .map((u) => u.username)
+          .toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      last = await ref
+          .read(settingsRepositoryProvider)
+          .getSetting(SettingKey.lastLoginUsername);
+    } catch (_) {
+      // The drop-down is a convenience; typing a name still works.
+    }
+    if (!mounted) return;
+    setState(() => _usernames = names);
+    if (_usernameController.text.isEmpty && last != null && names.contains(last)) {
+      _usernameController.text = last;
+      _passwordFocus.requestFocus();
+    }
   }
 
   Future<void> _loadCompanies() async {
@@ -79,6 +110,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _showDefaultCredsHint = false;
     });
     await _checkFirstTimeUser();
+    await _loadUsernames();
   }
 
   Future<void> _openCompanyManagement() async {
@@ -92,6 +124,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _showDefaultCredsHint = false);
     await _loadCompanies();
     await _checkFirstTimeUser();
+    await _loadUsernames();
   }
 
   // Show the hint only while admin/admin actually still works as a login.
@@ -110,6 +143,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -146,6 +180,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         SnackBar(content: Text(l10n.loginInvalidCredentialsMessage)),
       );
       return;
+    }
+
+    if (!cfg.isCloud) {
+      try {
+        await ref
+            .read(settingsRepositoryProvider)
+            .setSetting(SettingKey.lastLoginUsername, user.username);
+      } catch (_) {
+        // Remembering the user is a convenience; never block the sign-in.
+      }
     }
 
     _afterLoginNavigate(cfg, user);
@@ -337,12 +381,44 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ],
                         TextField(
                           controller: _usernameController,
+                          textInputAction: TextInputAction.next,
+                          onSubmitted: (_) => _passwordFocus.requestFocus(),
                           decoration: InputDecoration(
                             labelText: cfg.isCloud
                                 ? l10n.fieldEmailLabel
                                 : l10n.loginUsernameLabel,
                             prefixIcon: const Icon(Icons.person),
                             border: const OutlineInputBorder(),
+                            suffixIcon: (!cfg.isCloud && _usernames.isNotEmpty)
+                                ? PopupMenuButton<String>(
+                                    key: const ValueKey('loginUserPicker'),
+                                    tooltip: l10n.loginUsernameLabel,
+                                    icon: const Icon(Icons.arrow_drop_down),
+                                    onSelected: (name) {
+                                      _usernameController.text = name;
+                                      _passwordFocus.requestFocus();
+                                    },
+                                    itemBuilder: (_) => [
+                                      for (final name in _usernames)
+                                        PopupMenuItem<String>(
+                                          value: name,
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.person_outline,
+                                                  size: 18),
+                                              const SizedBox(width: 8),
+                                              Flexible(
+                                                child: Text(name,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                    ],
+                                  )
+                                : null,
                           ),
                           keyboardType: cfg.isCloud
                               ? TextInputType.emailAddress
@@ -351,6 +427,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         AppSpacing.hMedium,
                         TextField(
                           controller: _passwordController,
+                          focusNode: _passwordFocus,
                           obscureText: _obscurePassword,
                           onSubmitted: (_) => _login(cfg),
                           decoration: InputDecoration(

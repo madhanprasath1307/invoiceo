@@ -123,9 +123,17 @@ class _UserManagementScreenV2State extends ConsumerState<UserManagementScreenV2>
       // Reject a username already taken by another user before hitting the
       // DB's UNIQUE constraint (which would surface as a raw sqlite error).
       final trimmedName = _usernameController.text.trim();
-      final existing =
-          await ref.read(authRepositoryProvider).getUserByUsername(trimmedName);
-      if (existing != null && existing.id != _editingUserId) {
+      // Sign-in ignores letter case, so "Ravi" is also taken by "ravi".
+      final folded = trimmedName.toLowerCase();
+      final allUsers = await ref.read(authRepositoryProvider).getAllUsers();
+      // Keeping a name unchanged is always fine, even for an older pair like
+      // "Bob" and "bob" that already differ only by case.
+      final unchanged = allUsers
+          .any((u) => u.id == _editingUserId && u.username == trimmedName);
+      final existing = !unchanged &&
+          allUsers.any((u) =>
+              u.id != _editingUserId && u.username.trim().toLowerCase() == folded);
+      if (existing) {
         if (!mounted) return;
         _showSnackBar(l10n.userMgmtUsernameTakenMessage, Colors.red);
         return;

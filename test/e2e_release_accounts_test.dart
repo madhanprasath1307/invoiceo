@@ -406,8 +406,15 @@ void main() {
       await startApp(tester);
       expect(find.byType(LoginScreen), findsOneWidget);
       expect(find.textContaining('First time here?'), findsNothing);
+      // Login remembers who signed in last: the name is filled in, the
+      // password box is not.
       expect(
           tester.widget<TextField>(field(TextField, en.loginUsernameLabel))
+              .controller!
+              .text,
+          'admin');
+      expect(
+          tester.widget<TextField>(field(TextField, en.loginPasswordLabel))
               .controller!
               .text,
           isEmpty);
@@ -486,7 +493,6 @@ void main() {
         ['admin', 'wrong-pass'],
         ['admin', 'admin'],
         ['nobody', _adminNewPassword],
-        ['ADMIN', _adminNewPassword],
       ]) {
         await login(tester, creds[0], creds[1]);
         expect(find.text(en.loginInvalidCredentialsMessage), findsOneWidget,
@@ -496,8 +502,9 @@ void main() {
         await settle(tester, 4);
       }
 
-      // Spaces around the username are ignored; Enter in the password box logs in.
-      await tester.enterText(field(TextField, en.loginUsernameLabel), '  admin ');
+      // Spaces around the username and its letter case are ignored ("ADMIN"
+      // signs in as admin); Enter in the password box logs in.
+      await tester.enterText(field(TextField, en.loginUsernameLabel), '  ADMIN ');
       await tester.enterText(
           field(TextField, en.loginPasswordLabel), _adminNewPassword);
       await tester.testTextInput.receiveAction(TextInputAction.done);

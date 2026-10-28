@@ -14,15 +14,27 @@ class UserService {
 
   /// Looks up a user by username and verifies the password.
   /// Supports both legacy SHA-256 (salt == null) and HMAC-SHA256.
+  ///
+  /// The username is matched exactly first, so accounts created before
+  /// case-insensitive sign-in keep working. When nothing matches exactly,
+  /// a name that differs only by letter case ("Ravi" for "ravi") is accepted
+  /// if it fits exactly one account; with two such accounts the exact
+  /// spelling is required.
   static Future<User?> getUser(String username, String password) async {
     final db = await dbHelper.database;
-    final result = await db.query(
+    var result = await db.query(
       'users',
       where: 'username = ?',
       whereArgs: [username],
     );
-
-    if (result.isEmpty) return null;
+    if (result.isEmpty) {
+      result = await db.query(
+        'users',
+        where: 'LOWER(username) = ?',
+        whereArgs: [username.toLowerCase()],
+      );
+      if (result.length != 1) return null;
+    }
 
     final user = User.fromMap(result.first);
     if (PasswordUtils.verify(password, user.password, user.salt)) {
