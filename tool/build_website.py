@@ -29,7 +29,7 @@ RELEASE_ISO = '2026-10-28'
 # page content changes between app releases; pages use the later of this and
 # RELEASE_ISO as their dateModified and sitemap <lastmod>. PAGE_UPDATED can give
 # a single page its own date. Privacy/terms keep their policy date (RELEASE_ISO).
-SITE_UPDATED_ISO = '2026-10-28'
+SITE_UPDATED_ISO = '2026-10-31'
 PAGE_UPDATED = {}
 PAGE_MODIFIED = {}  # filled by page(): filename -> dateModified, reused by the sitemap
 COFFEE = 'https://buymeacoffee.com/madcreations'
@@ -420,7 +420,7 @@ def header(active, home=False, base=False, lang='en'):
     else:
         links = [('Features', f'{pre}#features', 'features'), ('How it works', f'{pre}#how-it-works', 'how'),
                  ('Reviews', 'reviews.html', 'reviews'), ('FAQ', 'faq.html', 'faq'), ('Contact', 'contact.html', 'contact')]
-        more = [('Screenshots', f'{pre}#screenshots', 'screenshots'), ('What’s new', 'changelog.html', 'changelog')]
+        more = [('Compare', 'compare.html', 'compare'), ('Screenshots', f'{pre}#screenshots', 'screenshots'), ('What’s new', 'changelog.html', 'changelog')]
         words = {'dl': 'Download free', 'skip': 'Skip to content', 'home': f'{NAME} home',
                  'main': 'Main', 'menu': 'Menu', 'main_menu': 'Main menu'}
     others = [(c, v) for c, v in LANG_LINKS.items() if c != lang]
@@ -485,7 +485,7 @@ def footer(home=False, lang='en'):
                   '<a href="licenses.html">MIT License</a>, © 2025 ANOOP P.')
     else:
         cols = [('Product', [('Features', f'href="{pre}#features"'), ('How it works', f'href="{pre}#how-it-works"'),
-                             ('Screenshots', f'href="{pre}#screenshots"'), ('Customer reviews', 'href="reviews.html"'),
+                             ('Screenshots', f'href="{pre}#screenshots"'), ('Compare with others', 'href="compare.html"'), ('Customer reviews', 'href="reviews.html"'),
                              ('Download', 'href="download.html"'),
                              ('What’s new', 'href="changelog.html"')]),
                 ('Help', [('FAQ', 'href="faq.html"'), ('Contact', 'href="contact.html"'), ('Support request', support),
@@ -688,14 +688,14 @@ hero = f'''<section class="hero" aria-labelledby="hero-title">
     <div class="hero-copy">
       <div class="badges">{badge('Free &amp; open source', 'brand', 'code')}{badge('Windows · macOS · Linux', 'neutral', 'monitor')}</div>
       <h1 class="display" id="hero-title"><em>Free</em> billing software that works offline</h1>
-      <p class="lead">Create GST invoices, quotations and receipts on your own computer. {NAME} is a free, open-source desktop app — no subscription, no sign-up, and your business data never leaves your PC.</p>
+      <p class="lead">Create GST invoices, quotations and receipts on your own computer. {NAME} is a free, open-source desktop app — no invoice limit, no subscription, no sign-up, and your business data never leaves your PC.</p>
       <div class="cta-row">
         <a class="btn btn-primary btn-lg" href="#download" data-os-download><span data-os-icon>{icon('download')}</span><span data-os-label>Download free</span></a>
         {btn('See the features', '#features', 'secondary', 'lg')}
       </div>
       {hero_send('en')}
       <p class="hero-meta" data-hero-meta>Free · Version <span data-version>{VERSION}</span> · For Windows, macOS and Linux</p>
-      {checks(['Free forever', 'Open source', 'Works offline', 'No sign-up'], 'checks-inline')}
+      {checks(['Free forever', 'No invoice limit', 'Works offline', 'No sign-up'], 'checks-inline')}
     </div>
     <div class="hero-visual">
       {window('create-invoice', f'The {NAME} New Invoice screen: customer Kannan, four grocery items, GST and a total of Rs. 5,829.50', cls='hero-shot', lazy=False, sizes='(max-width: 1100px) 100vw, 700px')}
@@ -928,6 +928,7 @@ download = section(
 HOME_FAQ = [
     ('Is Invoiceo really free?', 'Yes. Every feature is free, with no trial, subscription or paid tier. Install it on as many computers as you like.', True),
     ('Is Invoiceo open source?', 'Yes. It is released under the MIT License, so anyone can read, use and change the code.', True),
+    ('Is there any limit on invoices?', 'No. There is no limit on invoices, customers or products, and no trial that ends. Some other free billing apps cap the free plan; see <a href="compare.html">how Invoiceo compares</a>.', False),
     ('Does it work offline?', 'Yes. You only need the internet to download it. Billing, printing and reports all work offline.', True),
     ('Do I need an account?', 'No online account. The app has its own login on your computer, so each person can have a password.', True),
     ('Where is my data stored?', 'On your computer, in Invoiceo’s data folder. Use <b>Settings → Backup</b> to keep a copy somewhere safe.', False),
@@ -947,6 +948,26 @@ home_faq = section(
       '<a href="faq.html">read all the answers</a> or <a href="contact.html">contact us</a>.</p>',
     'faq', '', 'faq-title')
 
+# ───────────────────── Comparison (home teaser, "not built in") ─────────────────────
+COMPARE_CHECKED = '31 October 2026'
+compare_home = section(
+    section_head('How it compares', 'Free means free here',
+                 'Some free billing software limits the free plan or ends after a short trial. Invoiceo does not.', 'cmp-title')
+    + '<div class="grid-auto mt-4">'
+    + f'<div class="card">{tile("gift")}<h3>No invoice limit, no trial</h3><p>Some free plans allow only a few documents a month (for example 10), or are a 7-day trial. {NAME} has no limit and no end date, on as many computers as you like.</p></div>'
+    + f'<div class="card">{tile("lock")}<h3>Offline and private</h3><p>Your data stays on your computer. There is no sign-up and no cloud account, and it is open source, so anyone can check what it does.</p></div>'
+    + f'<div class="card">{tile("globe")}<h3>Works in India and abroad</h3><p>GST invoices for India, or turn GST off and bill in any currency. Eight app languages, and A4 or 58/80 mm thermal printing, on Windows, macOS and Linux.</p></div>'
+    + '</div>'
+    + f'<p class="center mt-3">{btn("See the side-by-side comparison", "compare.html", "secondary", "", "arrow")}</p>',
+    'compare', '', 'cmp-title')
+
+NOT_YET = ['GSTR-1 and GSTR-3B files, e-invoice and e-way bill',
+           'Sending an invoice on WhatsApp or email from inside the app',
+           'A phone app (it runs on Windows, macOS and Linux computers)',
+           'A supplier and purchase section (the app records sales)',
+           'Live sharing of data between computers, or a cloud version',
+           'Ledgers, balance sheet and full accounting']
+
 final_cta = f'''<section class="cta-section" aria-labelledby="cta-title">
   <div class="wrap">
     <div class="cta-band">
@@ -963,7 +984,7 @@ final_cta = f'''<section class="cta-section" aria-labelledby="cta-title">
 page('index.html', f'{NAME} — Free offline billing and GST invoice software',
      f'{NAME} is free, open-source billing software for Windows, macOS and Linux. Make GST invoices, quotations and '
      'receipts offline, in Tamil, Hindi and more.',
-     'home', '\n\n'.join([hero, facts, why, how, features, shots, who, customers, local_global, privacy, open_source, download, home_faq, final_cta]),
+     'home', '\n\n'.join([hero, facts, why, compare_home, how, features, shots, who, customers, local_global, privacy, open_source, download, home_faq, final_cta]),
      jsonld=[software_ld('Free, open-source offline billing and GST invoice software for small businesses.', GROUPS),
              WEBSITE_LD])
 
@@ -1651,6 +1672,21 @@ FAQ_GROUPS = [
         ('How do I move to a new computer?',
          'Make a backup of each company on the old computer, copy the backup file to the new one, <a href="download.html">install Invoiceo there</a> and import the backup from <b>Settings → Backup</b>.'),
     ]),
+    ('Limits and what is not built in', [
+        ('Is there any limit on invoices?',
+         'No. There is no limit on invoices, customers, products or computers, and no trial period. Every feature is included.'),
+        ('Does Invoiceo file GST returns, or make e-invoices and e-way bills?',
+         ['Not built in. Invoiceo prints correct GST invoices and gives a <b>Tax report</b> by tax rate (taxable amount and tax) that you can save as CSV or PDF and give to your accountant. It does not make GSTR-1 or GSTR-3B files, e-invoices or e-way bills.',
+          'If you need these, they can be built as <a href="customization.html">paid customization</a>. Tell us the format you need.']),
+        ('Can I send an invoice on WhatsApp or email from the app?',
+         'Not directly. Save the invoice as a PDF (or print it) and attach it in WhatsApp or email. A one-click send button can be built as <a href="customization.html">paid customization</a>.'),
+        ('Can I record purchases and supplier bills?',
+         'The free app records sales and keeps a purchase price and stock count for each product. A separate supplier and purchase section is not part of the free app; it can be built as <a href="customization.html">paid customization</a>.'),
+        ('Can two computers use the same data?',
+         'Not live. Each computer keeps its own data, and there is no sync between computers or a cloud version. The simplest setup is one main billing computer where everyone logs in with their own user. To move data to another computer, use <b>Settings → Backup</b>. Sharing data between computers can be looked at as <a href="customization.html">paid customization</a>.'),
+        ('How is Invoiceo different from Vyapar, myBillBook or Tally?',
+         'Invoiceo is free with no limits, works fully offline, needs no sign-up and is open source. The others have more features, such as GST returns, e-invoicing and phone apps, but their free plans are limited or are trials. See the <a href="compare.html">side-by-side comparison</a>.'),
+    ]),
     ('Help and custom work', [
         ('Can you add a feature for my business?',
          'Yes, as a paid service, quoted per request. Tell us what you need on the <a href="customization.html">Customization page</a>.'),
@@ -1758,6 +1794,139 @@ page('faq.html', 'FAQ: free offline GST billing software',
                   ' '.join(a) if isinstance(a, list) else a))).strip()}}
              for q, a in FAQ],
      })
+
+# ─────────────────────────────── Compare page ───────────────────────────────
+# Facts below come from each company's own website, checked on COMPARE_CHECKED.
+# Where a page did not say, the cell says "Not listed" (never a guess). Plans,
+# limits and prices change, so re-check every few months and update the date.
+COMPARE_COLS = [
+    (NAME, None),
+    ('Vyapar', 'https://vyaparapp.in/'),
+    ('myBillBook', 'https://mybillbook.in/'),
+    ('Tally', 'https://tallysolutions.com/gst-software/free/'),
+    ('Sleek Bill', 'https://sleekbill.in/lifetime-free-gst-billing-software/'),
+]
+NL = 'Not listed'
+COMPARE_ROWS = [
+    ('The free plan',
+     ['Free forever. Every feature included, no limit on invoices, customers or computers',
+      'Basic features free on mobile; desktop is a free trial',
+      'Free sign-up; plan prices are on a separate page',
+      '7-day free trial, then paid plans',
+      'Free basic version, limited to 10 documents a month']),
+    ('Works without internet',
+     ['Yes, fully', 'Offline billing, then syncs to the cloud', 'Apps with real-time cloud sync', 'Yes', 'Yes']),
+    ('Sign-up or account',
+     ['None', 'Phone number to download', 'Sign-up', 'Form for the free trial', 'Direct download, no sign-up']),
+    ('Where your data is kept',
+     ['Only on your computer', 'Your device, with cloud backup and sync', 'Cloud', 'Your computer', 'Your PC, with optional sync']),
+    ('Open source',
+     ['Yes (MIT License)', 'No', 'No', 'No', 'No']),
+    ('Phone app',
+     ['No, computers only', 'Yes', 'Yes', NL, NL]),
+    ('GST returns, e-invoice, e-way bill',
+     ['Not built in. A Tax report by rate (CSV or PDF) for your accountant',
+      'E-invoice, e-way bill and GST returns', 'GSTR-1, 2, 3B, e-invoice and e-way bill',
+      'GSTR-1, GSTR-3B, e-way bill and e-invoicing', 'GSTR-1, GSTR-3B and GSTR-2A reports']),
+    ('Send bills on WhatsApp or email',
+     ['Not built in. Save the PDF and attach it', 'WhatsApp sharing and reminders', 'WhatsApp and SMS reminders', NL,
+      'Optional email of invoices']),
+    ('Accounting',
+     ['Sales, tax, profit, receivables and stock reports. No ledgers or balance sheet', 'Accounting as an add-on',
+      'Bookkeeping and bank reconciliation', 'Full accounting', 'Ledgers, profit and loss, cash and bank book']),
+    ('Languages',
+     ['8 app languages; Tamil prints correctly on PDFs and receipts', '9+ Indian languages', NL, NL, NL]),
+]
+COMPARE_TONES = [
+    'ypppp',   # free plan
+    'yppyy',   # works without internet
+    'yppyy',   # sign-up or account
+    'yppyy',   # where data is kept
+    'ynnnn',   # open source
+    'nyyxx',   # phone app
+    'pyyyy',   # GST returns, e-invoice, e-way bill (ours: Tax report only)
+    'nyyxp',   # WhatsApp or email
+    'pyyyy',   # accounting
+    'yyxxx',   # languages
+]
+PICK_US = ['You want billing that is free for good, with no invoice cap and no trial that ends',
+           'You want your data on your own computer, with no sign-up and no cloud account',
+           'You print on A4 or 58/80 mm thermal printers, or need Tamil or Hindi on your bills',
+           'You want open-source software, or a small custom feature made for your business at a fair price']
+PICK_OTHER = ['You file GST returns from the software, or need e-invoice and e-way bill',
+              'You need a phone app, or several shops or computers working on the same data',
+              'You want WhatsApp or SMS reminders sent from the software',
+              'You need full accounting with ledgers and a balance sheet']
+
+compare_th = ''.join(
+    (f'<th scope="col" class="us"><span class="us-pill">Free forever</span><br>{n}</th>' if not u else
+     f'<th scope="col"><a href="{u}" target="_blank" rel="noopener nofollow">{n}</a></th>')
+    for n, u in COMPARE_COLS)
+compare_tr = ''.join(
+    f'<tr><th scope="row">{t}</th>' + ''.join(
+        f'<td{" class=\"us\"" if i == 0 else ""}><span class="mk mk-{COMPARE_TONES[ri][i]}" aria-hidden="true"></span>{c}</td>'
+        for i, c in enumerate(cells)) + '</tr>'
+    for ri, (t, cells) in enumerate(COMPARE_ROWS))
+GLANCE = [('gift', 'No invoice limit', 'free, with no trial'), ('wifi-off', 'Works offline', 'no internet needed'),
+          ('lock', 'No sign-up', 'data stays on your PC'), ('code', 'Open source', 'MIT License')]
+glance = ('<div class="facts-strip compare-glance"><ul class="wrap facts facts-4">'
+          + ''.join(f'<li class="fact">{tile(i, "teal", "md")}<div><b>{v}</b><span>{l}</span></div></li>' for i, v, l in GLANCE)
+          + '</ul></div>')
+compare_body = page_head('Compare', f'{NAME} compared with Vyapar, myBillBook, Tally and Sleek Bill',
+                         f'A plain side-by-side look at free billing software for Indian shops. Checked on {COMPARE_CHECKED} from each company’s own website.',
+                         extra=f'<div class="badges mt-2">{badge("Free forever", "teal", "gift")}{badge("Works offline", "brand", "wifi-off")}{badge("Open source", "neutral", "code")}</div>') + glance + f'''
+
+<section class="page-body">
+  <div class="wrap">
+    <div class="compare-wrap" role="region" aria-label="Comparison table" tabindex="0">
+      <table class="compare">
+        <thead><tr><th scope="col"><span class="sr-only">Feature</span></th>{compare_th}</tr></thead>
+        <tbody>{compare_tr}</tbody>
+      </table>
+    </div>
+    <p class="compare-hint small">Swipe sideways to see every column →</p>
+    <ul class="compare-legend"><li><span class="mk mk-y"></span>Included</li><li><span class="mk mk-p"></span>Partly, or with limits</li>
+      <li><span class="mk mk-n"></span>Not available</li><li><span class="mk mk-x"></span>Not listed on their page</li></ul>
+    <p class="small mt-2">Checked on {COMPARE_CHECKED} from the home or pricing pages linked above. Plans, limits and prices change, so please check
+      their websites before you decide. “Not listed” means that page did not say. All product names belong to their owners;
+      {NAME} is not connected to them.</p>
+  </div>
+</section>
+
+<section class="section section-subtle" aria-labelledby="cmp-pick">
+  <div class="wrap">
+    <h2 id="cmp-pick" class="h3 center">Which is right for you?</h2>
+    <div class="split split-stretch mt-4">
+      <div class="group-card"><div class="group-card-head">{tile("check-circle", "teal")}<h3>Choose {NAME} if…</h3></div>{checks(PICK_US)}</div>
+      <div class="group-card"><div class="group-card-head">{tile("help", "neutral")}<h3>Choose another if…</h3></div><ul class="plain-list">{"".join(f"<li>{i}</li>" for i in PICK_OTHER)}</ul></div>
+    </div>
+    <div class="stack mt-4" style="align-items: center; text-align: center; gap: 14px">
+      <p>Missing something? {NAME} is free, and features such as the ones above can be built for your business as a paid service, quoted per request.</p>
+      <div class="cta-row" style="justify-content: center">
+        {btn(f'Download {NAME} free', 'download.html', 'primary', 'lg', 'download')}
+        {btn('Ask about a customization', 'customization.html', 'secondary', 'lg', 'arrow')}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-section" aria-labelledby="cmp-cta">
+  <div class="wrap">
+    <div class="cta-band">
+      <h2 id="cmp-cta">Try it yourself. It is free.</h2>
+      <p class="lead">Download {NAME} and make your first invoice in a few minutes. No sign-up, no card, no trial that ends.</p>
+      <div class="cta-row">
+        {btn(f'Download {NAME} free', 'download.html', 'inverse', 'lg', 'download')}
+        {btn('Questions? Ask us', 'contact.html', 'on-dark', 'lg', 'message')}
+      </div>
+    </div>
+  </div>
+</section>'''
+
+page('compare.html', f'{NAME} compared with Vyapar, myBillBook, Tally and Sleek Bill',
+     f'Free billing software compared: {NAME} against Vyapar, myBillBook, Tally and Sleek Bill on free-plan limits, offline use, '
+     f'sign-up, open source, GST returns and more. Checked {COMPARE_CHECKED}.',
+     'compare', compare_body, crumb='Compare')
 
 # ───────────────────────────────── Contact ─────────────────────────────────
 NEW_TAB = ' target="_blank" rel="noopener"'
@@ -2094,7 +2263,7 @@ page('404.html', 'Page not found', f'This page could not be found on the {NAME} 
 print('pages written')
 
 # ───────────────────────── sitemap / robots / llms / manifest ──────────────
-pages = ['', 'ta.html', 'hi.html', 'download.html', 'customization.html', 'reviews.html', 'faq.html', 'changelog.html', 'contact.html',
+pages = ['', 'ta.html', 'hi.html', 'download.html', 'compare.html', 'customization.html', 'reviews.html', 'faq.html', 'changelog.html', 'contact.html',
          'privacy.html', 'terms.html', 'licenses.html']
 with open(os.path.join(OUT, 'sitemap.xml'), 'w') as f:
     f.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n')
@@ -2120,6 +2289,7 @@ with open(os.path.join(OUT, 'llms.txt'), 'w') as f:
 - [Home in Tamil]({SITE}/ta.html): the same page in Tamil (தமிழ்)
 - [Home in Hindi]({SITE}/hi.html): the same page in Hindi (हिन्दी)
 - [Download]({SITE}/download.html): installers for Windows, macOS and Linux, with install steps
+- [Compare]({SITE}/compare.html): Invoiceo next to Vyapar, myBillBook, Tally and Sleek Bill, checked {COMPARE_CHECKED}
 - [Customization]({SITE}/customization.html): paid custom features, quoted per request
 - [Reviews]({SITE}/reviews.html): what customers say, and recent custom work
 - [FAQ]({SITE}/faq.html): price, open source, offline use, data storage, GST, printers, languages
@@ -2131,7 +2301,8 @@ with open(os.path.join(OUT, 'llms.txt'), 'w') as f:
 
 ## Key facts
 
-- Price: free, no subscription; paid customization on request
+- Price: free, no subscription, no invoice limit; paid customization on request
+- Not built in: GSTR-1/3B files, e-invoice, e-way bill, WhatsApp/email sending, phone app, supplier and purchase section, live sync between computers
 - Open source: MIT License
 - Platforms: Windows 10/11 (64-bit), macOS 12 or later, Linux (.deb and AppImage)
 - Works offline; no online account needed
@@ -2214,6 +2385,12 @@ for p in PLATFORMS:
     full += [f'  {i + 1}. {md(st)}' for i, st in enumerate(p['steps'])] + ['']
 full += ['### First steps', ''] + [f'{i + 1}. **{t}**: {md(b)}' for i, (_, t, b) in enumerate(FIRST_STEPS)]
 full += ['', '### Updating to a new version', '', first(r'Updating to a new version</h2><p>(.*?)</p>', download_body)]
+full += ['', f'## How {NAME} compares ({SITE}/compare.html)', '',
+         f'Checked on {COMPARE_CHECKED} from each company’s own website. "Not listed" means their page did not say. Plans and limits change.', '']
+for ri, (rt, cells) in enumerate(COMPARE_ROWS):
+    full += [f'**{rt}**', ''] + [f'- {COMPARE_COLS[i][0]}: {c}' for i, c in enumerate(cells)] + ['']
+full += ['Choose Invoiceo if: ' + '; '.join(PICK_US) + '.', '', 'Choose another if: ' + '; '.join(PICK_OTHER) + '.', '',
+         'Not built in to Invoiceo: ' + '; '.join(NOT_YET) + '.']
 full += ['', '## Frequently asked questions', '']
 for t, items in FAQ_GROUPS:
     full += [f'### {md(t)}', '']
