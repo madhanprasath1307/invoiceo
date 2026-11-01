@@ -79,6 +79,7 @@
   "modernDashLowStockCount": "{count} 个低库存",
   "modernDashLast12Months": "最近 12 个月",
   "modernDashThisMonth": "本月",
+  "modernDashThisWeek": "本周",
   "modernDashLastMonth": "上月",
   "modernDashInvoiceNo": "发票号",
   "modernDashAddCustomer": "添加客户",

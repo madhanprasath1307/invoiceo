@@ -431,6 +431,95 @@ class ReportService {
         .toList();
   }
 
+  // ── 2a. Revenue trend by hour, day or month ────────────────────────────────
+
+  /// Billed, collected and outstanding per [bucket], for the dashboard chart.
+  ///
+  /// Day and month: collected is grouped by payment date and the rest by
+  /// invoice date, like [getMonthlyRevenueTrend]. Hour: payments only carry a
+  /// date, so each invoice's paid amount counts in the hour the invoice was
+  /// made, which is how a counter sale is paid. Empty buckets are left out;
+  /// the caller fills the gaps.
+  static Future<List<TrendPoint>> getRevenueTrend(DateTime from, DateTime to,
+      {TrendBucket bucket = TrendBucket.day, String? currencyCode}) async {
+    final rows =
+        await _loadRows(from: from, to: to, currencyCode: currencyCode);
+
+    String invoiceKey(String date) {
+      switch (bucket) {
+        case TrendBucket.month:
+          return date.length >= 7 ? date.substring(0, 7) : '';
+        case TrendBucket.day:
+          return date.length >= 10 ? date.substring(0, 10) : '';
+        case TrendBucket.hour:
+          if (date.length < 10) return '';
+          final hour = date.length >= 13 ? date.substring(11, 13) : '00';
+          return '${date.substring(0, 10)} $hour';
+      }
+    }
+
+    final collected = <String, double>{};
+    if (bucket != TrendBucket.hour) {
+      final db = await _db.database;
+      final currencyFilter = currencyCode != null
+          ? 'AND (i.currency_code = ? OR i.currency_code IS NULL) '
+          : '';
+      // date_paid is a date-only key; see getMonthlyRevenueTrend.
+      final args = <Object?>[
+        if (currencyCode != null) currencyCode,
+        AppDate.dateKey(from),
+        AppDate.dateKeyEnd(to),
+      ];
+      final pattern = bucket == TrendBucket.month ? '%Y-%m' : '%Y-%m-%d';
+      final paid = await db.rawQuery(
+        "SELECT strftime('$pattern', ip.date_paid) AS bucket, "
+        "COALESCE(SUM(ip.amount_paid), 0.0) AS collected "
+        "FROM invoice_payments ip "
+        "JOIN invoices i ON ip.invoice_id = i.id "
+        "WHERE i.deleted_at IS NULL AND i.type IN $_salesTypesSql "
+        "AND (i.status IS NULL OR i.status != 'declined') "
+        "$currencyFilter"
+        "AND ip.date_paid >= ? AND ip.date_paid <= ? "
+        "GROUP BY bucket ORDER BY bucket",
+        args,
+      );
+      for (final r in paid) {
+        final k = r['bucket'] as String?;
+        if (k != null) collected[k] = (r['collected'] as num).toDouble();
+      }
+    }
+
+    final billed = <String, double>{};
+    final outstanding = <String, double>{};
+    final count = <String, int>{};
+    for (final r in rows) {
+      final k = invoiceKey(r.date);
+      if (k.isEmpty) continue;
+      billed[k] = (billed[k] ?? 0) + r.total;
+      outstanding[k] = (outstanding[k] ?? 0) + r.outstanding;
+      if (!r.isReceipt) count[k] = (count[k] ?? 0) + 1;
+      if (bucket == TrendBucket.hour) {
+        // A receipt with no payment rows is paid in full when it is made.
+        collected[k] = (collected[k] ?? 0) +
+            (r.isReceipt && !r.hasPayments ? r.total : r.paid);
+      } else if (r.isReceipt && !r.hasPayments) {
+        collected[k] = (collected[k] ?? 0) + r.total;
+      }
+    }
+
+    final keys = {...billed.keys, ...collected.keys}.toList()..sort();
+    return [
+      for (final k in keys)
+        TrendPoint(
+          key: k,
+          billed: billed[k] ?? 0,
+          collected: collected[k] ?? 0,
+          outstanding: outstanding[k] ?? 0,
+          invoiceCount: count[k] ?? 0,
+        ),
+    ];
+  }
+
   // ── 2b. Daily sales/profit trend ────────────────────────────────────────────
 
   static Future<List<DailyPoint>> getDailyRevenueTrend(

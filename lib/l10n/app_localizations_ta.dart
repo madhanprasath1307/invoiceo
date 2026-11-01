@@ -276,6 +276,9 @@ class AppLocalizationsTa extends AppLocalizations {
   String get modernDashThisMonth => 'இந்த மாதம்';
 
   @override
+  String get modernDashThisWeek => 'இந்த வாரம்';
+
+  @override
   String get modernDashLastMonth => 'கடந்த மாதம்';
 
   @override

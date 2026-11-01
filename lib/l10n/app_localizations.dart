@@ -590,6 +590,12 @@ abstract class AppLocalizations {
   /// **'This month'**
   String get modernDashThisMonth;
 
+  /// No description provided for @modernDashThisWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'This week'**
+  String get modernDashThisWeek;
+
   /// No description provided for @modernDashLastMonth.
   ///
   /// In en, this message translates to:

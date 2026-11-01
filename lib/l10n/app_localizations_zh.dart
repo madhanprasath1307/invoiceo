@@ -265,6 +265,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modernDashThisMonth => '本月';
 
   @override
+  String get modernDashThisWeek => '本周';
+
+  @override
   String get modernDashLastMonth => '上月';
 
   @override

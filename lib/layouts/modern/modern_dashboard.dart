@@ -2,10 +2,12 @@
 // Default / Classic / Bento / Simple choice here). See docs/LAYOUTS.md.
 //
 //  * Header: title, greeting, and the date range the cards and the invoice
-//    status work on (this month by default).
+//    status work on (today by default; Today, This week, This month, Last
+//    month or a custom range).
 //  * Four cards: revenue collected, outstanding, invoices (each compared with
 //    the period before) and products (with how many are low on stock).
-//  * Sales overview (collected / outstanding per month) and invoice status.
+//  * Sales overview (collected / outstanding per hour, day or month, with
+//    its own filter) and invoice status.
 //  * Recent invoices and low-stock products.
 //  * Quick actions.
 import 'package:fl_chart/fl_chart.dart';
@@ -96,29 +98,131 @@ class ModernStatusCounts {
   }
 }
 
-/// One month of the sales overview chart.
+/// The quick filters of the dashboard and of the sales overview.
+enum ModernPreset { today, thisWeek, thisMonth, lastMonth, custom }
+
+DateTime _dayOf(DateTime d) => DateTime(d.year, d.month, d.day);
+
+/// The dates of a quick filter on [now]. A week runs Monday to Sunday.
+/// [ModernPreset.custom] has no fixed dates (this month is returned).
+DateTimeRange modernPresetRange(ModernPreset preset, DateTime now) {
+  final today = _dayOf(now);
+  switch (preset) {
+    case ModernPreset.today:
+      return DateTimeRange(start: today, end: today);
+    case ModernPreset.thisWeek:
+      final monday = DateTime(today.year, today.month, today.day - (today.weekday - 1));
+      return DateTimeRange(
+          start: monday, end: DateTime(monday.year, monday.month, monday.day + 6));
+    case ModernPreset.lastMonth:
+      return modernMonthRange(DateTime(today.year, today.month - 1, 1));
+    case ModernPreset.thisMonth:
+    case ModernPreset.custom:
+      return modernMonthRange(today);
+  }
+}
+
+/// Which quick filter [range] is on [now], or [ModernPreset.custom].
+ModernPreset modernPresetOf(DateTimeRange range, DateTime now) {
+  final s = _dayOf(range.start), e = _dayOf(range.end);
+  for (final p in const [
+    ModernPreset.today,
+    ModernPreset.thisWeek,
+    ModernPreset.thisMonth,
+    ModernPreset.lastMonth,
+  ]) {
+    final r = modernPresetRange(p, now);
+    if (r.start == s && r.end == e) return p;
+  }
+  return ModernPreset.custom;
+}
+
+/// One point per hour for a single day, per day up to about three months,
+/// per month beyond that.
+TrendBucket modernTrendBucket(DateTimeRange range) {
+  final s = _dayOf(range.start), e = _dayOf(range.end);
+  if (s == e) return TrendBucket.hour;
+  if (e.difference(s).inDays <= 92) return TrendBucket.day;
+  return TrendBucket.month;
+}
+
+/// One point of the sales overview chart: an hour, a day or a month.
 class ModernTrendPoint {
-  const ModernTrendPoint(this.month, this.collected, this.outstanding);
-  final DateTime month;
+  const ModernTrendPoint(this.at, this.collected, this.outstanding);
+  final DateTime at;
   final double collected;
   final double outstanding;
 }
 
-/// Every month from [from] to [to], filled from [points] (months without data
-/// are zero, so the chart has no gaps).
-List<ModernTrendPoint> modernFillMonths(
-    DateTime from, DateTime to, List<MonthlyPoint> points) {
-  final byMonth = {for (final p in points) p.month: p};
+/// Every hour, day or month of [range] that has started by [now], filled
+/// from [points] (empty ones are zero, so the chart has no gaps). The days
+/// still to come are left out, so the lines do not fall to zero for them.
+/// At least two points are returned so a line can be drawn.
+List<ModernTrendPoint> modernFillTrend(DateTimeRange range, DateTime now,
+    TrendBucket bucket, List<TrendPoint> points) {
+  final byKey = {for (final p in points) p.key: p};
+  String two(int n) => n.toString().padLeft(2, '0');
+  // Built by hand: DateFormat follows the app language and would give
+  // native digits (Nepali), which never match the stored keys.
+  String keyOf(DateTime d) {
+    switch (bucket) {
+      case TrendBucket.hour:
+        return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}';
+      case TrendBucket.day:
+        return '${d.year}-${two(d.month)}-${two(d.day)}';
+      case TrendBucket.month:
+        return '${d.year}-${two(d.month)}';
+    }
+  }
+
+  DateTime next(DateTime d) {
+    switch (bucket) {
+      case TrendBucket.hour:
+        return DateTime(d.year, d.month, d.day, d.hour + 1);
+      case TrendBucket.day:
+        return DateTime(d.year, d.month, d.day + 1);
+      case TrendBucket.month:
+        return DateTime(d.year, d.month + 1);
+    }
+  }
+
+  final today = _dayOf(now);
+  final first = _dayOf(range.start);
+  if (first.isAfter(today)) return const [];
+  final rangeEnd = _dayOf(range.end);
+  final DateTime from;
+  final DateTime lastStarted;
+  final DateTime limit;
+  switch (bucket) {
+    case TrendBucket.hour:
+      from = first;
+      final isToday = first == today;
+      lastStarted = isToday
+          ? DateTime(today.year, today.month, today.day, now.hour)
+          : DateTime(first.year, first.month, first.day, 23);
+      limit = DateTime(first.year, first.month, first.day, 23);
+    case TrendBucket.day:
+      from = first;
+      final end = rangeEnd.isBefore(today) ? rangeEnd : today;
+      lastStarted = end;
+      limit = rangeEnd;
+    case TrendBucket.month:
+      from = DateTime(first.year, first.month);
+      final end = rangeEnd.isBefore(today) ? rangeEnd : today;
+      lastStarted = DateTime(end.year, end.month);
+      limit = DateTime(rangeEnd.year, rangeEnd.month);
+  }
+
   final out = <ModernTrendPoint>[];
-  var m = DateTime(from.year, from.month);
-  final last = DateTime(to.year, to.month);
-  while (!m.isAfter(last)) {
-    // Built by hand: DateFormat follows the app language and would give
-    // native digits (Nepali), which never match the stored '2026-10'.
-    final key = '${m.year}-${m.month.toString().padLeft(2, '0')}';
-    final p = byMonth[key];
-    out.add(ModernTrendPoint(m, p?.collected ?? 0, p?.outstanding ?? 0));
-    m = DateTime(m.year, m.month + 1);
+  for (var d = from; !d.isAfter(lastStarted); d = next(d)) {
+    final p = byKey[keyOf(d)];
+    out.add(ModernTrendPoint(d, p?.collected ?? 0, p?.outstanding ?? 0));
+  }
+  // A line needs two points: run on into the next bucket if the range allows.
+  while (out.length < 2) {
+    final d = next(out.last.at);
+    if (d.isAfter(limit)) break;
+    out.add(ModernTrendPoint(d, 0, 0));
   }
   return out;
 }
@@ -172,8 +276,11 @@ class ModernDashboard extends ConsumerStatefulWidget {
 }
 
 class _ModernDashboardState extends ConsumerState<ModernDashboard> {
-  late DateTimeRange _range = modernMonthRange(DateTime.now());
-  int _trendMonths = 6;
+  // Both start on Today, the counter's question.
+  late DateTimeRange _range = modernPresetRange(ModernPreset.today, DateTime.now());
+  // The sales overview has its own filter, with the same choices.
+  late DateTimeRange _trendRange = modernPresetRange(ModernPreset.today, DateTime.now());
+  TrendBucket _trendBucket = TrendBucket.hour;
 
   bool _loading = true;
   String _currency = '₹';
@@ -201,8 +308,8 @@ class _ModernDashboardState extends ConsumerState<ModernDashboard> {
     final invoices = ref.read(invoiceRepositoryProvider);
     final prev = modernPreviousRange(_range);
     final now = DateTime.now();
-    final trendFrom = DateTime(now.year, now.month - (_trendMonths - 1), 1);
-    final trendTo = modernMonthRange(now).end;
+    final trendRange = _trendRange;
+    final bucket = modernTrendBucket(trendRange);
 
     // Only the home currency is added up (as on Reports), so invoices in
     // another currency are not counted under the home symbol.
@@ -220,8 +327,8 @@ class _ModernDashboardState extends ConsumerState<ModernDashboard> {
       products.getProductListCount(tab: 'out', type: 'product'), // 5
       reports.getInvoiceStatusList(_range.start, _range.end,
           currencyCode: code), // 6
-      reports.getMonthlyRevenueTrend(trendFrom, trendTo,
-          currencyCode: code), // 7
+      reports.getRevenueTrend(trendRange.start, trendRange.end,
+          bucket: bucket, currencyCode: code), // 7
       // "Recent Invoices": invoices only (no quotations shown as Unpaid).
       invoices.getRecentInvoices(limit: 5, type: 'Invoice'), // 8
       products.getProductListPage(
@@ -238,8 +345,8 @@ class _ModernDashboardState extends ConsumerState<ModernDashboard> {
       _productCount = r[3] as int;
       _lowStockCount = (r[4] as int) + (r[5] as int);
       _status = ModernStatusCounts.fromRows(r[6] as List<InvoiceStatusRow>);
-      _trend = modernFillMonths(
-          trendFrom, trendTo, r[7] as List<MonthlyPoint>);
+      _trendBucket = bucket;
+      _trend = modernFillTrend(trendRange, now, bucket, r[7] as List<TrendPoint>);
       _recent = r[8] as List<Invoice>;
       // Out of stock first, then the lowest stock: the five most urgent.
       _lowStock = [...r[9] as List<Product>, ...r[10] as List<Product>]
@@ -382,69 +489,133 @@ class _ModernDashboardState extends ConsumerState<ModernDashboard> {
     );
   }
 
-  Widget _rangePicker() {
+  String _presetName(ModernPreset p) {
+    final l10n = AppLocalizations.of(context)!;
+    switch (p) {
+      case ModernPreset.today:
+        return l10n.reportsTodayLabel;
+      case ModernPreset.thisWeek:
+        return l10n.modernDashThisWeek;
+      case ModernPreset.thisMonth:
+        return l10n.modernDashThisMonth;
+      case ModernPreset.lastMonth:
+        return l10n.modernDashLastMonth;
+      case ModernPreset.custom:
+        return l10n.reportsCustomRangeLabel;
+    }
+  }
+
+  /// The filter menu: Today, This week, This month, Last month, Custom Range.
+  /// [compact] is the small button on the sales overview card.
+  Widget _rangeMenu({
+    required Key key,
+    required DateTimeRange current,
+    required ValueChanged<DateTimeRange> onChanged,
+    bool compact = false,
+  }) {
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
     final fmt = DateFormat('MMM dd, yyyy');
     final now = DateTime.now();
-    final presets = <String, DateTimeRange>{
-      l10n.modernDashThisMonth: modernMonthRange(now),
-      l10n.modernDashLastMonth: modernMonthRange(DateTime(now.year, now.month - 1, 1)),
-      l10n.reportsPresetLast3MonthsLabel: DateTimeRange(
-          start: DateTime(now.year, now.month - 2, 1), end: modernMonthRange(now).end),
-      l10n.reportsPresetThisYearLabel:
-          DateTimeRange(start: DateTime(now.year, 1, 1), end: DateTime(now.year, 12, 31)),
-    };
-    return PopupMenuButton<Object>(
-      key: const ValueKey('modernDashRange'),
+    final preset = modernPresetOf(current, now);
+    final sameDay = _dayOf(current.start) == _dayOf(current.end);
+    final dates = sameDay
+        ? fmt.format(current.start)
+        : '${fmt.format(current.start)} - ${fmt.format(current.end)}';
+    final name = _presetName(preset);
+
+    return PopupMenuButton<ModernPreset>(
+      key: key,
       tooltip: '',
       offset: const Offset(0, 48),
-      onSelected: (v) async {
-        if (v is DateTimeRange) {
-          setState(() => _range = v);
-          _load();
-        } else {
+      onSelected: (p) async {
+        if (p == ModernPreset.custom) {
           final picked = await showDateRangePicker(
             context: context,
             firstDate: DateTime(2000),
             lastDate: DateTime(2100),
-            initialDateRange: _range,
+            initialDateRange: current,
           );
           if (picked == null || !mounted) return;
-          setState(() => _range = picked);
-          _load();
+          onChanged(picked);
+        } else {
+          onChanged(modernPresetRange(p, now));
         }
       },
       itemBuilder: (_) => [
-        for (final e in presets.entries)
-          PopupMenuItem<Object>(value: e.value, child: Text(e.key)),
+        for (final p in const [
+          ModernPreset.today,
+          ModernPreset.thisWeek,
+          ModernPreset.thisMonth,
+          ModernPreset.lastMonth,
+        ])
+          PopupMenuItem<ModernPreset>(
+              key: ValueKey('modernPreset_${p.name}'),
+              value: p,
+              child: Text(_presetName(p))),
         const PopupMenuDivider(),
-        PopupMenuItem<Object>(
-            value: 'custom', child: Text(l10n.reportsCustomRangeLabel)),
+        PopupMenuItem<ModernPreset>(
+            key: const ValueKey('modernPreset_custom'),
+            value: ModernPreset.custom,
+            child: Text(l10n.reportsCustomRangeLabel)),
       ],
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        decoration: BoxDecoration(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? scheme.surfaceContainerHighest
-              : BrandColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: scheme.outlineVariant),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.calendar_today_outlined, size: 18, color: scheme.onSurfaceVariant),
-            const SizedBox(width: 10),
-            Text('${fmt.format(_range.start)} - ${fmt.format(_range.end)}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-            const SizedBox(width: 8),
-            Icon(Icons.keyboard_arrow_down, size: 20, color: scheme.onSurfaceVariant),
-          ],
-        ),
-      ),
+      child: compact
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: scheme.outlineVariant),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(preset == ModernPreset.custom ? dates : name,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(width: 4),
+                const Icon(Icons.keyboard_arrow_down, size: 18),
+              ]),
+            )
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? scheme.surfaceContainerHighest
+                    : BrandColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: scheme.outlineVariant),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.calendar_today_outlined,
+                      size: 18, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 10),
+                  Text.rich(TextSpan(children: [
+                    TextSpan(
+                        text: name,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                    TextSpan(
+                        text: '   $dates',
+                        style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w500,
+                            color: scheme.onSurfaceVariant)),
+                  ])),
+                  const SizedBox(width: 8),
+                  Icon(Icons.keyboard_arrow_down,
+                      size: 20, color: scheme.onSurfaceVariant),
+                ],
+              ),
+            ),
     );
   }
+
+  Widget _rangePicker() => _rangeMenu(
+        key: const ValueKey('modernDashRange'),
+        current: _range,
+        onChanged: (r) {
+          setState(() => _range = r);
+          _load();
+        },
+      );
 
   // ── KPI cards ──────────────────────────────────────────────────────────
 
@@ -592,7 +763,38 @@ class _ModernDashboardState extends ConsumerState<ModernDashboard> {
     final maxY = _trend.fold<double>(
         0, (m, p) => [m, p.collected, p.outstanding].reduce((a, b) => a > b ? a : b));
     final top = maxY <= 0 ? 1000.0 : maxY * 1.2;
-    final fmt = DateFormat('MMM yyyy');
+    // Axis labels and the tooltip title follow the bucket: hour, day or month.
+    String axisLabel(ModernTrendPoint p) {
+      switch (_trendBucket) {
+        case TrendBucket.hour:
+          return DateFormat.j().format(p.at);
+        case TrendBucket.day:
+          return _trend.length <= 8
+              ? DateFormat('EEE d').format(p.at)
+              : DateFormat('d MMM').format(p.at);
+        case TrendBucket.month:
+          return DateFormat('MMM yyyy').format(p.at);
+      }
+    }
+
+    String tipLabel(ModernTrendPoint p) {
+      switch (_trendBucket) {
+        case TrendBucket.hour:
+          return DateFormat('d MMM, j').format(p.at);
+        case TrendBucket.day:
+          return DateFormat('EEE, d MMM yyyy').format(p.at);
+        case TrendBucket.month:
+          return DateFormat('MMM yyyy').format(p.at);
+      }
+    }
+
+    // How many points apart the bottom labels are, so they never touch.
+    final n = _trend.length;
+    final labelEvery = switch (_trendBucket) {
+      TrendBucket.hour => n <= 8 ? 1 : 3,
+      TrendBucket.day => n <= 8 ? 1 : (n <= 16 ? 2 : (n <= 31 ? 5 : 7)),
+      TrendBucket.month => n > 8 ? 2 : 1,
+    };
 
     LineChartBarData series(Color color, double Function(ModernTrendPoint) v) =>
         LineChartBarData(
@@ -653,7 +855,7 @@ class _ModernDashboardState extends ConsumerState<ModernDashboard> {
                   sideTitles: SideTitles(
                     showTitles: true,
                     reservedSize: 28,
-                    interval: _trend.length > 8 ? 2 : 1,
+                    interval: labelEvery.toDouble(),
                     getTitlesWidget: (v, meta) {
                       final i = v.round();
                       if (i < 0 || i >= _trend.length || v != i.toDouble()) {
@@ -661,7 +863,7 @@ class _ModernDashboardState extends ConsumerState<ModernDashboard> {
                       }
                       return Padding(
                         padding: const EdgeInsets.only(top: 6),
-                        child: Text(fmt.format(_trend[i].month),
+                        child: Text(axisLabel(_trend[i]),
                             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
                       );
                     },
@@ -680,7 +882,7 @@ class _ModernDashboardState extends ConsumerState<ModernDashboard> {
                   getTooltipItems: (spots) => [
                     for (var k = 0; k < spots.length; k++)
                       LineTooltipItem(
-                        k == 0 ? '${fmt.format(_trend[spots[k].x.round()].month)}\n' : '',
+                        k == 0 ? '${tipLabel(_trend[spots[k].x.round()])}\n' : '',
                         TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
                         textAlign: TextAlign.left,
                         children: [
@@ -725,33 +927,14 @@ class _ModernDashboardState extends ConsumerState<ModernDashboard> {
                 children: [
                   _legendDot(_C.blue, l10n.dashboardCollectedLabel),
                   _legendDot(_C.teal, l10n.dashboardOutstandingLabel),
-                  PopupMenuButton<int>(
-                    key: const ValueKey('modernDashTrendMonths'),
-                    tooltip: '',
-                    onSelected: (m) {
-                      setState(() => _trendMonths = m);
+                  _rangeMenu(
+                    key: const ValueKey('modernDashTrendRange'),
+                    current: _trendRange,
+                    compact: true,
+                    onChanged: (r) {
+                      setState(() => _trendRange = r);
                       _load();
                     },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(value: 6, child: Text(l10n.reportsPresetLast6MonthsLabel)),
-                      PopupMenuItem(value: 12, child: Text(l10n.modernDashLast12Months)),
-                    ],
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: scheme.outlineVariant),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text(
-                            _trendMonths == 6
-                                ? l10n.reportsPresetLast6MonthsLabel
-                                : l10n.modernDashLast12Months,
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.keyboard_arrow_down, size: 18),
-                      ]),
-                    ),
                   ),
                 ],
               ),

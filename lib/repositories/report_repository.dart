@@ -3,6 +3,8 @@ import 'package:invoiceo/models/report_models.dart';
 abstract class ReportRepository {
   Future<RevenueKpi> getRevenueSummary(DateTime from, DateTime to, {String? currencyCode});
   Future<List<MonthlyPoint>> getMonthlyRevenueTrend(DateTime from, DateTime to, {String? currencyCode});
+  /// Billed / collected / outstanding per hour, day or month (see [TrendBucket]).
+  Future<List<TrendPoint>> getRevenueTrend(DateTime from, DateTime to, {TrendBucket bucket = TrendBucket.day, String? currencyCode});
   Future<List<DailyPoint>> getDailyRevenueTrend(DateTime from, DateTime to, {String? currencyCode});
   Future<StatusBreakdown> getPaymentStatusBreakdown(DateTime from, DateTime to, {String? currencyCode});
   Future<List<AgedReceivable>> getAgedReceivables({String? currencyCode});

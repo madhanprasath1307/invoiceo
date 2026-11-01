@@ -274,6 +274,9 @@ class AppLocalizationsNe extends AppLocalizations {
   String get modernDashThisMonth => 'यो महिना';
 
   @override
+  String get modernDashThisWeek => 'यो हप्ता';
+
+  @override
   String get modernDashLastMonth => 'गत महिना';
 
   @override

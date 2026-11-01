@@ -274,6 +274,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get modernDashThisMonth => 'Ce mois-ci';
 
   @override
+  String get modernDashThisWeek => 'Cette semaine';
+
+  @override
   String get modernDashLastMonth => 'Mois dernier';
 
   @override

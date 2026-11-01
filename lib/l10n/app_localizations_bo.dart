@@ -273,6 +273,9 @@ class AppLocalizationsBo extends AppLocalizations {
   String get modernDashThisMonth => 'This month';
 
   @override
+  String get modernDashThisWeek => 'This week';
+
+  @override
   String get modernDashLastMonth => 'Last month';
 
   @override

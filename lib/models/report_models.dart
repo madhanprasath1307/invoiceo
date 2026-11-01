@@ -53,6 +53,27 @@ class MonthlyPoint {
       netSales == 0 ? 0.0 : (profit / netSales) * 100;
 }
 
+/// How finely a revenue trend is cut.
+enum TrendBucket { hour, day, month }
+
+/// One point of a revenue trend. [key] is 'yyyy-MM-dd HH' (hour),
+/// 'yyyy-MM-dd' (day) or 'yyyy-MM' (month).
+class TrendPoint {
+  final String key;
+  final double billed;
+  final double collected;
+  final double outstanding;
+  final int invoiceCount;
+
+  const TrendPoint({
+    required this.key,
+    required this.billed,
+    required this.collected,
+    required this.outstanding,
+    this.invoiceCount = 0,
+  });
+}
+
 class DailyPoint {
   final String date;
   final int invoiceCount;
