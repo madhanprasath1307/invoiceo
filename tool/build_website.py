@@ -2184,7 +2184,7 @@ privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {date_tag(RE
     <h2>This website</h2>
     <ul>
       <li><b>Hosting.</b> This site is hosted on GitHub Pages. GitHub may record technical information such as your IP address when you visit, as described in the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener">GitHub Privacy Statement</a>. Installers are downloaded from GitHub as well.</li>
-      <li><b>Fonts.</b> The text font (Manrope) is loaded from Google Fonts, so your browser fetches it from Google’s servers when a page opens. Google’s handling of this is described in the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>.</li>
+      <li><b>Fonts.</b> The text font (Manrope), and the poster font (Poppins) on your first visit to the home page, are loaded from Google Fonts, so your browser fetches them from Google’s servers when a page opens. Google’s handling of this is described in the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>.</li>
       <li><b>Forms.</b> Our support, customization and feedback forms are Google Forms. What you type into them (such as your name, email, phone number and message) is sent to our Google account so that we can reply. Google’s handling of it is described in the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>.</li>
       <li><b>Analytics.</b> This website uses Google Analytics to count visits and see which pages and download buttons are used. It sets cookies in your browser for this. Google Analytics does not store IP addresses, and we have turned off its advertising features. We use it only to improve the site. You can block these cookies in your browser settings.</li>
       <li><b>Email and WhatsApp.</b> If you contact us, we keep the conversation so that we can help you and follow up.</li>
@@ -2293,6 +2293,7 @@ licenses_body = page_head('Legal', 'Licenses',
       <li><b>Feather icons</b>, released under the MIT License, © 2013–2017 Cole Bemis.</li>
       <li><b>Platform logos</b> (Windows, Apple, Linux) from Simple Icons, released under CC0 1.0. The logos are trademarks of their owners.</li>
       <li><b>Manrope</b> typeface by Mikhail Sharanda, released under the SIL Open Font License 1.1, served by Google Fonts.</li>
+      <li><b>Poppins</b> typeface by Indian Type Foundry, released under the SIL Open Font License 1.1, served by Google Fonts. It is loaded only for the first-visit poster on the home page.</li>
     </ul>
     <p>Questions about licences? Write to <a href="mailto:{EMAIL}">{EMAIL}</a>, or see the other ways to <a href="contact.html">contact us</a>.</p>
     </div>
