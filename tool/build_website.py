@@ -247,7 +247,7 @@ PLATFORMS = [
              'The installer isn’t code-signed yet.',
      'steps': ['Open the downloaded file.',
                'If Windows shows <b>“Windows protected your PC”</b>, click <b>More info</b>, then <b>Run anyway</b>. '
-               'This appears because the installer is not code-signed yet.',
+               'This appears because the installer is not code-signed yet. <a href="#windows-warning">See it with pictures</a>.',
                f'Follow the setup. {NAME} then opens from the Start menu.']},
     {'key': 'mac', 'anchor': 'macos', 'icon': 'apple', 'name': 'macOS',
      'req': 'macOS 12 Monterey or later', 'short': 'macOS 12 or later',
@@ -1494,6 +1494,62 @@ page('hi.html', f'मुफ़्त बिलिंग सॉफ़्टवे
              WEBSITE_LD])
 
 # ──────────────────────────────── Download ─────────────────────────────────
+
+# ── Windows warning: picture guide (Download page) ──────────────────────────
+# The installer is not code-signed, so Windows SmartScreen asks first. These are our own
+# drawings of the two screens (no Microsoft artwork); the words are the ones Windows shows.
+_RING = 'fill="none" stroke="#f59e0b" stroke-width="3"'
+_DLG = ('<rect x="10" y="10" width="300" height="180" rx="8" fill="#0b5cad"/>'
+        '<text x="28" y="40" fill="#fff" font-size="15" font-weight="700">Windows protected your PC</text>'
+        '<text x="28" y="62" fill="#d6e6fa" font-size="9.5">Microsoft Defender SmartScreen prevented an</text>'
+        '<text x="28" y="76" fill="#d6e6fa" font-size="9.5">unrecognised app from starting.</text>')
+WIN_PIC_1 = ('<svg class="warn-pic" viewBox="0 0 320 200" role="img" aria-label="The downloaded file Invoiceo-Setup-Windows.exe in a folder">'
+             '<rect x="0" y="0" width="320" height="200" rx="12" fill="#f3f6fb"/>'
+             '<rect x="40" y="50" width="240" height="96" rx="12" fill="#fff" stroke="#cbd5e1"/>'
+             '<rect x="58" y="70" width="44" height="44" rx="10" fill="#1f6feb"/>'
+             '<path d="M72 92h16m-8-8v16" stroke="#fff" stroke-width="3" stroke-linecap="round"/>'
+             '<text x="114" y="88" fill="#142033" font-size="12" font-weight="700">Invoiceo-Setup-Windows.exe</text>'
+             '<text x="114" y="108" fill="#5b687c" font-size="11">Double-click to open</text>'
+             '<circle cx="232" cy="124" r="14" ' + _RING + '/></svg>')
+WIN_PIC_2 = ('<svg class="warn-pic" viewBox="0 0 320 200" role="img" aria-label="The blue Windows protected your PC window with the More info link highlighted">'
+             '<rect x="0" y="0" width="320" height="200" rx="12" fill="#f3f6fb"/>' + _DLG +
+             '<text x="28" y="110" fill="#fff" font-size="11" text-decoration="underline">More info</text>'
+             '<rect x="20" y="96" width="62" height="22" rx="6" ' + _RING + '/>'
+             '<rect x="218" y="152" width="76" height="24" rx="4" fill="#fff" opacity=".18"/>'
+             '<text x="256" y="168" fill="#fff" font-size="11" text-anchor="middle">Don’t run</text></svg>')
+WIN_PIC_3 = ('<svg class="warn-pic" viewBox="0 0 320 200" role="img" aria-label="The same window after More info, with the Run anyway button highlighted">'
+             '<rect x="0" y="0" width="320" height="200" rx="12" fill="#f3f6fb"/>' + _DLG +
+             '<text x="28" y="102" fill="#fff" font-size="10.5">App: Invoiceo-Setup-Windows.exe</text>'
+             '<text x="28" y="118" fill="#fff" font-size="10.5">Publisher: Unknown publisher</text>'
+             '<rect x="132" y="152" width="80" height="24" rx="4" fill="#fff"/>'
+             '<text x="172" y="168" fill="#0b5cad" font-size="11" font-weight="700" text-anchor="middle">Run anyway</text>'
+             '<rect x="126" y="146" width="92" height="36" rx="8" ' + _RING + '/>'
+             '<rect x="224" y="152" width="76" height="24" rx="4" fill="#fff" opacity=".18"/>'
+             '<text x="262" y="168" fill="#fff" font-size="11" text-anchor="middle">Don’t run</text></svg>')
+WINDOWS_GUIDE = f"""<section class="section section-subtle" id="windows-warning" aria-labelledby="warn-title">
+  <div class="wrap">
+    {section_head('Windows help', 'Windows shows a blue warning? Here is what to do',
+                  'It takes about 10 seconds. Windows asks this when you open the installer.', 'warn-title')}
+    <ol class="steps-row steps-3 mt-4">
+      <li>{WIN_PIC_1}<span class="step-label">Step 1</span><h3 class="h4">Open the file</h3>
+        <p>Open <b>{FILES['windows']}</b> from your Downloads folder, or click it in your browser’s download list.</p></li>
+      <li>{WIN_PIC_2}<span class="step-label">Step 2</span><h3 class="h4">Click “More info”</h3>
+        <p>If a blue window says <b>“Windows protected your PC”</b>, click the small <b>More info</b> link. Do not click <b>Don’t run</b>.</p></li>
+      <li>{WIN_PIC_3}<span class="step-label">Step 3</span><h3 class="h4">Click “Run anyway”</h3>
+        <p>A <b>Run anyway</b> button appears. Click it, then follow the setup. {NAME} opens from the Start menu.</p></li>
+    </ol>
+    <p class="small muted center mt-2">These are drawings of the two screens. Yours may look slightly different.</p>
+    <div class="grid-auto mt-4">
+      <div class="card">{tile('shield', 'teal')}<h3 class="h4">Why does Windows show this?</h3>
+        <p>Windows shows this window for apps it does not recognise yet. {NAME}’s installer is not code-signed yet, so Windows has no record of it. It does not mean the file is harmful.</p></div>
+      <div class="card">{tile('check')}<h3 class="h4">Want to check the file first?</h3>
+        <p>Open PowerShell in your Downloads folder and run <code>Get-FileHash .\\{FILES['windows']}</code>. The result should match the line for {FILES['windows']} in <a href="{DL}SHA256SUMS.txt">SHA256SUMS.txt</a>.</p></div>
+    </div>
+    <p class="center small mt-3">Still stuck? <a href="contact.html">Tell us</a> and we will help you install it.</p>
+  </div>
+</section>
+"""
+
 download_body = page_head(
     'Download', f'Download {NAME}', 'Free for Windows, macOS and Linux. No sign-up, no licence key and no subscription.',
     f'\n    <div class="badges">{badge("Version <span data-version>" + VERSION + "</span>", "brand")}'
@@ -1509,7 +1565,8 @@ download_body = page_head(
   </div>
 </section>
 
-<section class="section section-subtle" aria-labelledby="first-steps">
+{WINDOWS_GUIDE}
+<section class="section" aria-labelledby="first-steps">
   <div class="wrap">
     {section_head('After installing', 'Up and running in minutes', hid='first-steps')}
     <div class="mt-4">{first_steps()}</div>
@@ -1664,7 +1721,7 @@ FAQ_GROUPS = [
         ('Which computers does it run on?',
          'Windows 10 and 11 (64-bit), macOS 12 Monterey or later, and Linux: a .deb for Ubuntu 22.04+, Debian 12+ and Linux Mint 21+, and an AppImage for other distributions. There is no phone app.'),
         ('Windows says “Windows protected your PC”. Is it safe?',
-         'This message appears for installers that are not code-signed yet. If you downloaded Invoiceo from this website, click <b>More info</b> and then <b>Run anyway</b>. The <a href="download.html#windows">Windows install steps</a> walk you through it.'),
+         'This message appears for installers that are not code-signed yet. If you downloaded Invoiceo from this website, click <b>More info</b> and then <b>Run anyway</b>. The <a href="download.html#windows-warning">Windows picture guide</a> shows both screens, and you can check the file with its <a href="download.html#windows-warning">SHA-256 fingerprint</a>.'),
         ('macOS says it cannot check the app for malicious software.',
          'The app is not notarised by Apple yet. Click <b>Done</b>, open <b>System Settings → Privacy &amp; Security</b>, scroll down to the message about Invoiceo and click <b>Open Anyway</b>. On macOS 14 or older, Control-click Invoiceo in Applications and choose <b>Open</b>. You only need to do this the first time.'),
         ('How do I update to a new version?',
