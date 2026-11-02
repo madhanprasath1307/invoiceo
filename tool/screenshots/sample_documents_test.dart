@@ -1,6 +1,6 @@
 // Makes the website's sample documents with the real PDF code: an A4 GST
-// invoice (Classic design) and an 80 mm thermal receipt with Tamil item
-// names, for a sample shop (phone numbers start with 1, which no Indian
+// invoice (Classic design) and an 80 mm thermal receipt, both with common
+// everyday items, for a sample shop (phone numbers start with 1, which no Indian
 // mobile does, so they cannot reach a real person; no UPI ID or bank
 // account is set, so nothing on them can take a real payment). Run:
 //   flutter test tool/screenshots/sample_documents_test.dart
@@ -106,17 +106,16 @@ void main() {
         Product(id: id, name: name, description: '', price: price, stock: 100, hsncode: hsn,
             tax_rate: tax, purchasePrice: 0, type: type, unlimitedStock: type == 'service', unit: unit);
     final products = [
-      p('p1', '3 Roses Tea 250g', 145, '0902', 5),
-      p('p2', 'Ponni Rice 25kg', 1450, '1006', 0),
-      p('p3', 'Toor Dal 1kg', 168, '0713', 0),
-      p('p4', 'Aachi Chilli Powder 100g', 45, '0904', 5),
-      p('p5', 'Aavin Ghee 500ml', 340, '0405', 12),
-      p('s1', 'Home Delivery', 40, '9968', 18, type: 'service'),
-      // Tamil names, as many shops in Tamil Nadu keep them.
-      p('t1', 'பொன்னி அரிசி 5கி', 310, '1006', 0),
-      p('t2', 'துவரம் பருப்பு 1கி', 168, '0713', 0),
-      p('t3', 'ஆச்சி மிளகாய் தூள் 100கி', 45, '0904', 5),
-      p('p6', 'Sugar 1kg', 46, '1701', 5),
+      p('p1', 'Wireless Mouse', 599, '8471', 18),
+      p('p2', 'Dell 24" Monitor', 9499, '8528', 18),
+      p('p3', 'Mechanical Keyboard', 1899, '8471', 18),
+      p('p4', 'USB-C Cable 1m', 299, '8544', 18),
+      p('p5', 'Laptop Stand', 899, '9403', 18),
+      p('s1', 'Setup & Installation', 500, '9987', 18, type: 'service'),
+      p('t1', 'Headphones', 1299, '8518', 18),
+      p('t2', 'Mouse Pad', 199, '3926', 18),
+      p('t3', 'USB Flash Drive 32GB', 449, '8523', 18),
+      p('p6', 'Printer Paper A4 (500)', 349, '4802', 12),
     ];
     for (final x in products) {
       await ProductService.insertProduct(x);

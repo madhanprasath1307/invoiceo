@@ -132,8 +132,8 @@ void main() {
     await save(CompanyInfo(
         id: existing?.id,
         name: 'Sri Murugan Traders', address: '12, Big Bazaar Street, Madurai 625001',
-        phone: '12345 00010', email: 'billing@srimurugan.example', website: '',
-        gstin: '33ABCDE1234F1Z5'));
+        phone: '12345 00010', email: 'billing@srimurugan.example', website: 'www.srimurugan.example',
+        gstin: '33ABCDE1234F1Z5', panNumber: 'ABCDE1234F'));
     await BackendServices.settings.setSetting(SettingKey.uiLayout, UiLayout.modern.name);
     await CompanyRegistryService.ensureDefaultCompanyRegistered();
 
@@ -162,22 +162,22 @@ void main() {
         Product(id: id, name: name, description: '', price: price, stock: stock, hsncode: hsn,
             tax_rate: tax, purchasePrice: cost, type: type, unlimitedStock: unlimited, unit: unit);
     final products = [
-      p('p1', '3 Roses Tea 250g', 145, 42, hsn: '0902', cost: 118),
-      p('p2', 'Aachi Chilli Powder 100g', 45, 6, hsn: '0904', cost: 34),
-      p('p3', 'Sakthi Turmeric Powder 100g', 38, 35, hsn: '0910', cost: 29),
-      p('p4', 'Ponni Rice 25kg', 1450, 18, hsn: '1006', cost: 1290, tax: 0),
-      p('p5', 'Gold Winner Sunflower Oil 1L', 165, 0, hsn: '1512', cost: 148),
-      p('p6', 'Aavin Ghee 500ml', 340, 9, hsn: '0405', cost: 305, tax: 12),
-      p('p7', 'Toor Dal 1kg', 168, 54, hsn: '0713', cost: 150, tax: 0),
-      p('p8', 'Sugar 1kg', 46, 80, hsn: '1701', cost: 41),
-      p('s1', 'Home Delivery', 40, 0, hsn: '9968', tax: 18, type: 'service', unlimited: true),
-      p('s2', 'Gift Packing', 60, 0, hsn: '9985', tax: 18, type: 'service', unlimited: true),
+      p('p1', 'Wireless Mouse', 599, 42, hsn: '8471', cost: 440, tax: 18),
+      p('p2', 'USB-C Cable 1m', 299, 6, hsn: '8544', cost: 190, tax: 18),
+      p('p3', 'HDMI Cable 2m', 349, 35, hsn: '8544', cost: 240, tax: 18),
+      p('p4', 'Dell 24" Monitor', 9499, 18, hsn: '8528', cost: 8300, tax: 18),
+      p('p5', 'HD Webcam', 2499, 0, hsn: '8525', cost: 1900, tax: 18),
+      p('p6', 'Mechanical Keyboard', 1899, 9, hsn: '8471', cost: 1450, tax: 18),
+      p('p7', 'Laptop Stand', 899, 54, hsn: '9403', cost: 640, tax: 18),
+      p('p8', 'Printer Paper A4 (500)', 349, 80, hsn: '4802', cost: 290, tax: 12),
+      p('s1', 'Setup & Installation', 500, 0, hsn: '9987', tax: 18, type: 'service', unlimited: true),
+      p('s2', 'Extended Warranty (1 yr)', 799, 0, hsn: '9987', tax: 18, type: 'service', unlimited: true),
     ];
     for (final x in products) {
       await ProductService.insertProduct(x);
     }
     await ProductService.upsertProductMetadata(
-        ProductMetadata(productId: 'p1', skuCode: 'TRS-250'));
+        ProductMetadata(productId: 'p1', skuCode: 'MSE-001'));
 
     final now = DateTime.now();
     Future<Invoice> invoice(Customer c, List<(int, double)> lines, int daysAgo,
@@ -285,6 +285,13 @@ void main() {
       ),
     ));
     await settle(tester, 30);
+    // The dashboard opens on Today; the picture shows last month, which has the shop's busy days.
+    for (final key in ['modernDashRange', 'modernDashTrendRange']) {
+      await tester.tap(find.byKey(ValueKey(key)));
+      await settle(tester, 10);
+      await tester.tap(find.byKey(const ValueKey('modernPreset_lastMonth')).last);
+      await settle(tester, 30);
+    }
     await shot(tester, 'dashboard');
 
     // The sidebar keys carry the label in the app's language.
@@ -310,6 +317,56 @@ void main() {
     await shot(tester, 'products');
     await open(l10n.navReports);
     await shot(tester, 'reports');
+
+    // Forms and dialogs for the "How it works" page (nothing is saved).
+    Future<void> closeDialog() async {
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settle(tester, 15);
+    }
+    await open(l10n.navCustomers);
+    await tester.tap(find.text(l10n.customerMgmtNewCustomerButton).first);
+    await settle(tester, 25);
+    await shot(tester, 'customer-new');
+    await closeDialog();
+    await open(l10n.navProducts);
+    await tester.tap(find.text(l10n.productMgmtNewProductButton).first);
+    await settle(tester, 25);
+    await shot(tester, 'product-new');
+    await closeDialog();
+    // Create the draft invoice and capture the "created" card. This changes the shop's data, so it comes after every other
+    // screen that shows invoices or balances.
+    await open(l10n.navInvoices);
+    await tester.tap(find.byKey(const ValueKey('modernTabDrafts')));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('draftContinue_draft-1')));
+    await settle(tester, 30);
+    await tester.tap(find.byKey(const ValueKey('modernCreate')));
+    await settle(tester, 40);
+    await tester.pump(const Duration(seconds: 6));   // the green "created" message goes away by itself
+    await settle(tester, 10);
+    final closeMessage = find.byIcon(Icons.close);   // any message still showing at the bottom is closed
+    if (closeMessage.evaluate().isNotEmpty) {
+      await tester.tap(closeMessage.last);
+      await settle(tester, 10);
+    }
+    await shot(tester, 'invoice-created');
+
+    // Settings → Company info: step 1 of "How it works" on the website.
+    await open(l10n.navSettings);
+    await tester.tap(find
+        .descendant(of: find.byType(NavigationRail), matching: find.text(l10n.settingsNavCompanyInfoLabel))
+        .first);
+    await settle(tester, 20);
+    await shot(tester, 'company-info');
+    for (final (label, name) in [
+      (l10n.invoiceSettingsAppBarTitle, 'settings-invoice'),
+      (l10n.pdfSettingsTitle, 'settings-pdf'),
+      (l10n.settingsNavBackupLabel, 'settings-backup'),
+    ]) {
+      await tester.tap(find.descendant(of: find.byType(NavigationRail), matching: find.text(label)).first);
+      await settle(tester, 20);
+      await shot(tester, name);
+    }
 
     if (_settings) {
       // A common laptop width, and tall so most of each section shows.

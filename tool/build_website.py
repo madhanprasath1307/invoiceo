@@ -17,6 +17,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from site_text import load as load_text   # per-language text: tool/site_text/<code>.py
+TEXT = {}
 OUT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else '../invoiceo-website')
 SITE = 'https://invoiceo.in'
 NAME = 'Invoiceo'
@@ -42,24 +45,33 @@ FILES = {
     'linuxDeb': 'Invoiceo-Linux.deb',
     'linuxAppImage': 'Invoiceo-Linux.AppImage',
 }
-FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">\n'
-         '  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
-         '  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&amp;display=swap">')
-# The Tamil page adds Noto Sans Tamil; Manrope still draws the Latin letters.
-FONTS_TA = FONTS.replace('wght@400..800&amp;', 'wght@400..800&amp;family=Noto+Sans+Tamil:wght@400..800&amp;')
-FONTS_HI = FONTS.replace('wght@400..800&amp;', 'wght@400..800&amp;family=Noto+Sans+Devanagari:wght@400..800&amp;')
-HI_MONTHS = ['जनवरी', 'फ़रवरी', 'मार्च', 'अप्रैल', 'मई', 'जून', 'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर']
-TA_MONTHS = ['ஜனவரி', 'பிப்ரவரி', 'மார்ச்', 'ஏப்ரல்', 'மே', 'ஜூன்', 'ஜூலை', 'ஆகஸ்ட்', 'செப்டம்பர்', 'அக்டோபர்', 'நவம்பர்', 'டிசம்பர்']
-RELEASE_DATE_TA = f'{int(RELEASE_ISO[8:])} {TA_MONTHS[int(RELEASE_ISO[5:7]) - 1]} {RELEASE_ISO[:4]}'
-RELEASE_DATE_HI = f'{int(RELEASE_ISO[8:])} {HI_MONTHS[int(RELEASE_ISO[5:7]) - 1]} {RELEASE_ISO[:4]}'
+# Fonts are hosted on this site (assets/fonts, declared at the top of site.css), so no visitor's browser contacts Google for them.
+# The pages only preload the first files they draw with; the rest load when needed.
+def _preload(*files):
+    return '\n  '.join(f'<link rel="preload" href="/assets/fonts/{f}" as="font" type="font/woff2" crossorigin>' for f in files)
+FONTS = _preload('manrope-latin.woff2', 'fraunces-latin.woff2')              # English pages: Manrope text, Fraunces headings
+FONTS_TA = _preload('manrope-latin.woff2', 'notosanstamil-tamil.woff2')      # Tamil: Manrope draws the Latin letters
+FONTS_HI = _preload('manrope-latin.woff2', 'notosansdevanagari-devanagari.woff2')
+# Languages with a home page. To add one: copy tool/site_text/en.py to <code>.py, translate it, and add the code here.
+HOME_LANGS = ['en', 'ta', 'hi']
+for _code in HOME_LANGS:
+    TEXT[_code] = load_text(_code)
+FONT_LINKS = {'latin': FONTS, 'tamil': FONTS_TA, 'devanagari': FONTS_HI}   # keyed by TEXT[code]['shell']['fonts']
 # The home page in each language; they point at each other with hreflang.
-HOMES = {'en': 'index.html', 'ta': 'ta.html', 'hi': 'hi.html'}
+HOMES = {c: TEXT[c]['shell']['home'] for c in HOME_LANGS}
 # Where links to a home page point. The English home is the site root, so visits are not split
 # between / and /index.html (Google Analytics counts them as two pages).
-HOME_HREF = {'en': '/', 'ta': 'ta.html', 'hi': 'hi.html'}
-# (href, hreflang, label, title) of the header's language links.
-LANG_LINKS = {'en': ('/', 'English', 'Read in English'), 'ta': ('ta.html', 'தமிழ்', 'தமிழில் படிக்க'),
-              'hi': ('hi.html', 'हिन्दी', 'हिन्दी में पढ़ें')}
+HOME_HREF = {c: TEXT[c]['shell']['home_href'] for c in HOME_LANGS}
+# (href, label, title) of the header's language links.
+LANG_LINKS = {c: (TEXT[c]['shell']['switch']['href'], TEXT[c]['shell']['switch']['label'], TEXT[c]['shell']['switch']['title']) for c in HOME_LANGS}
+MONTHS = TEXT['en']['shell']['months']
+
+
+def fmt_release_date(lang):
+    """The release date written the way that language writes it, e.g. 28 October 2026."""
+    months = TEXT[lang]['shell']['months']
+    return f'{int(RELEASE_ISO[8:])} {months[int(RELEASE_ISO[5:7]) - 1]} {RELEASE_ISO[:4]}'
+
 
 # Icons: Feather (MIT, © Cole Bemis) and platform marks from Simple Icons (CC0). See licenses.html.
 STROKE = {
@@ -197,31 +209,57 @@ def small_copy(name):
 
 
 def window(name, alt, cls='', lazy=True, sizes='(max-width: 720px) 100vw, (max-width: 1100px) 50vw, 420px'):
-    full = f'assets/images/screens/{name}.png'
-    small = f'assets/images/screens/{name}-1280.jpg'
-    src = small if small_copy(name) else full
-    srcset = f' srcset="{small} 1280w, {full} {SHOT_W}w" sizes="{sizes}"' if src != full else ''
+    # path?v=<content hash>: a new screenshot is fetched again (the scenes over the screens depend on the exact picture)
+    has_small = small_copy(name)
+    full = asset(f'assets/images/screens/{name}.png')
+    small = asset(f'assets/images/screens/{name}-1280.jpg') if has_small else full
+    src = small
+    srcset = f' srcset="{small} 1280w, {full} {SHOT_W}w" sizes="{sizes}"' if has_small else ''
     load = ' loading="lazy" decoding="async"' if lazy else ' fetchpriority="high"'
     return (f'<div class="window{(" " + cls) if cls else ""}"><div class="window-bar"><i></i><i></i><i></i><span>{NAME}</span></div>'
             f'<a href="{full}" target="_blank" rel="noopener" title="Open full size">'
             f'<img src="{src}"{srcset} width="{SHOT_W}" height="{SHOT_H}" alt="{esc(alt)}"{load}></a></div>')
 
 
-RECEIPT = {
-    'en': {'rows': [('App licence', '0.00'), ('Monthly plan', 'None'), ('Sign-up', 'Not needed'),
-                    ('Internet', 'Not needed'), ('Paid add-ons', 'None')],
-           'title': f'What {NAME} costs you', 'total': 'Total', 'foot': 'Free forever · Open source (MIT)'},
-    'ta': {'rows': [('ஆப் உரிமம்', '0.00'), ('மாதக் கட்டணம்', 'இல்லை'), ('பதிவு', 'தேவையில்லை'),
-                    ('இன்டர்நெட்', 'தேவையில்லை'), ('கூடுதல் கட்டணம்', 'இல்லை')],
-           'title': f'{NAME}-க்கு நீங்கள் செலுத்துவது', 'total': 'மொத்தம்', 'foot': 'என்றும் இலவசம் · ஓப்பன் சோர்ஸ் (MIT)'},
-    'hi': {'rows': [('ऐप लाइसेंस', '0.00'), ('मासिक शुल्क', 'कोई नहीं'), ('साइन-अप', 'ज़रूरी नहीं'),
-                    ('इंटरनेट', 'ज़रूरी नहीं'), ('अलग से शुल्क', 'कोई नहीं')],
-           'title': f'{NAME} में आपका खर्च', 'total': 'कुल', 'foot': 'हमेशा मुफ़्त · ओपन सोर्स (MIT)'},
-}
+TOUR_STEPS = [  # screen index, cursor x/y and the lit area (box x, y, w, h), all as % of the screen
+    (0, (33, 13), (17, 9.5, 55, 8)),
+    (0, (24, 31), (17, 27, 55, 50)),
+    (0, (86, 12), (73.5, 9, 25, 47)),
+    (0, (91, 95.5), (84, 92.7, 14.7, 5.6)),   # Create Invoice, then the "created" card, then Print and the receipt prints
+    (2, (89, 33), (17, 28, 81, 8)),
+    (3, (30, 28), (17, 21.5, 81, 17)),
+]
+TOUR_SCREENS = ('create-invoice', 'invoice-created', 'invoices', 'dashboard')
+
+
+def hero_tour(lang, alt, labels):
+    """The hero app window: a guided walk (cursor, click, step label, screens) over real screenshots.
+    Without JS or with reduced motion it simply shows the first screen."""
+    names = [shot_file(n, lang) for n in TOUR_SCREENS]
+    imgs = ''
+    for i, n in enumerate(names):
+        has_small = small_copy(n)
+        src = asset(f'assets/images/screens/{n}-1280.jpg') if has_small else asset(f'assets/images/screens/{n}.png')
+        load = ' fetchpriority="high"' if i == 0 else ' loading="lazy" decoding="async"'
+        imgs += (f'<img class="tour-img{" is-on" if i == 0 else ""}" src="{src}" width="{SHOT_W}" height="{SHOT_H}" '
+                 f'alt="{esc(alt if i == 0 else "")}"{load}>')
+    steps = []
+    for i, (sc, c, b) in enumerate(TOUR_STEPS):
+        st = {'s': sc, 'x': c[0], 'y': c[1], 'b': list(b), 't': labels[i]}
+        if i == 3:
+            # click Create (1.3 s), the created card shows (1.9 s), the cursor goes to Print (2.6 s), clicks (3.7 s), the receipt prints (3.9 s)
+            st.update({'p': 1, 'd': 9800, 'sw': [1900, 1], 'm2': [2600, 73.2, 61, [65.5, 56.5, 15.5, 9.5]], 'c2': 3700, 'pt': 3900})
+        steps.append(st)
+    steps = json.dumps(steps, ensure_ascii=False)
+    cursor = ('<svg class="tour-cursor" viewBox="0 0 24 24" width="30" height="30" aria-hidden="true" focusable="false">'
+              '<path d="M5 3l14 8-6.2 1.6L9.6 19z" fill="#142033" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>')
+    return (f'<div class="window hero-shot tour" data-tour="{esc(steps)}"><div class="window-bar"><i></i><i></i><i></i><span>{NAME}</span></div>'
+            f'<div class="tour-stage">{imgs}<span class="tour-box" aria-hidden="true"></span>{cursor}<span class="tour-ripple" aria-hidden="true"></span>'
+            f'<div class="tour-step" aria-hidden="true"><b>1</b><span>{esc(labels[0])}</span></div></div></div>')
 
 
 def receipt(cls='', lang='en'):
-    t = RECEIPT[lang]
+    t = TEXT[lang]['receipt']
     zig = ''.join(f'L{x - 6} 12L{x - 12} 4' for x in range(276, 0, -12))
     body = ''.join(f'<div class="receipt-row"><span>{a}</span><b>{b}</b></div>' for a, b in t['rows'])
     return (f'<div class="receipt{(" " + cls) if cls else ""}"><div class="receipt-paper">'
@@ -238,87 +276,8 @@ def faq_item(q, a, open_=False):
 
 
 # ─────────────────────────────── Platforms ─────────────────────────────────
-PLATFORMS = [
-    {'key': 'windows', 'anchor': 'windows', 'icon': 'windows', 'name': 'Windows',
-     'req': 'Windows 10 and 11 · 64-bit', 'short': 'Windows 10 and 11',
-     'buttons': [('Download for Windows', FILES['windows'], 'windows')],
-     'files': [('windows', FILES['windows'])],
-     'note': 'Windows may say <b>“Windows protected your PC”</b>. Click <b>More info</b>, then <b>Run anyway</b>. '
-             'The installer isn’t code-signed yet.',
-     'steps': ['Open the downloaded file.',
-               'If Windows shows <b>“Windows protected your PC”</b>, click <b>More info</b>, then <b>Run anyway</b>. '
-               'This appears because the installer is not code-signed yet. <a href="#windows-warning">See it with pictures</a>.',
-               f'Follow the setup. {NAME} then opens from the Start menu.']},
-    {'key': 'mac', 'anchor': 'macos', 'icon': 'apple', 'name': 'macOS',
-     'req': 'macOS 12 Monterey or later', 'short': 'macOS 12 or later',
-     'buttons': [('Download for macOS', FILES['mac'], 'mac')],
-     'files': [('mac', FILES['mac'])],
-     'note': f'Drag {NAME} to Applications. If macOS can’t check the app, open '
-             '<b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>.',
-     'steps': [f'Open the .dmg and drag {NAME} into Applications.',
-               f'Open {NAME}. If macOS says it cannot verify the app, click <b>Done</b>. '
-               'This happens because the app is not notarised by Apple yet.',
-               f'Open <b>System Settings → Privacy &amp; Security</b>, scroll down to the message about {NAME} and click '
-               f'<b>Open Anyway</b>, then confirm. (On macOS 14 or older you can instead Control-click {NAME} in '
-               'Applications and choose <b>Open</b>.)',
-               'After that it opens normally.']},
-    {'key': 'linux', 'anchor': 'linux', 'icon': 'linux', 'name': 'Linux',
-     'req': 'Ubuntu 22.04+, Debian 12+, Mint 21+ and others', 'short': 'Ubuntu, Debian, Mint and more',
-     'buttons': [('Download .deb', FILES['linuxDeb'], 'linuxDeb'), ('Download AppImage', FILES['linuxAppImage'], 'linuxAppImage')],
-     'files': [('linuxDeb', FILES['linuxDeb']), ('linuxAppImage', FILES['linuxAppImage'])],
-     'note': f'Install the .deb with <code>sudo apt install ./{FILES["linuxDeb"]}</code>, or run '
-             f'<code>chmod +x {FILES["linuxAppImage"]}</code> and open the AppImage.',
-     'steps': [f'<b>.deb</b> (Ubuntu 22.04+, Debian 12+, Linux Mint 21+): run <code>sudo apt install ./{FILES["linuxDeb"]}</code> '
-               'in the folder you downloaded it to.',
-               f'<b>AppImage</b> (other distributions): run <code>chmod +x {FILES["linuxAppImage"]}</code>, then open the file.']},
-]
-# The same cards for the Tamil page. Button and menu names stay in English,
-# because that is what Windows and macOS show.
-PLATFORMS_TA = [
-    {**PLATFORMS[0], 'req': 'Windows 10, 11 · 64-bit', 'short': 'Windows 10, 11',
-     'buttons': [('Windows-க்கு டவுன்லோட்', FILES['windows'], 'windows')],
-     'steps': ['டவுன்லோட் ஆன ஃபைலைத் திறக்கவும்.',
-               '<b>“Windows protected your PC”</b> என்று வந்தால், <b>More info</b> அழுத்தி, பிறகு <b>Run anyway</b> அழுத்தவும். '
-               'இன்ஸ்டாலர் இன்னும் code-sign செய்யப்படாததால் இந்தச் செய்தி வருகிறது.',
-               f'Setup-ஐ முடிக்கவும். பிறகு Start மெனுவில் {NAME} இருக்கும்.']},
-    {**PLATFORMS[1], 'req': 'macOS 12 Monterey அல்லது அதற்குப் பிந்தையது', 'short': 'macOS 12 அல்லது பிந்தையது',
-     'buttons': [('macOS-க்கு டவுன்லோட்', FILES['mac'], 'mac')],
-     'steps': [f'.dmg ஃபைலைத் திறந்து {NAME}-ஐ Applications-க்குள் இழுத்து விடவும்.',
-               f'{NAME}-ஐத் திறக்கவும். ஆப்பைச் சரிபார்க்க முடியவில்லை என்று macOS சொன்னால் <b>Done</b> அழுத்தவும். '
-               'ஆப் இன்னும் Apple-ஆல் notarise செய்யப்படாததால் இது வருகிறது.',
-               f'<b>System Settings → Privacy &amp; Security</b> திறந்து, கீழே {NAME} பற்றிய செய்தியில் <b>Open Anyway</b> '
-               f'அழுத்தி உறுதிசெய்யவும். (macOS 14 அல்லது பழையதில், Applications-ல் {NAME} மேல் Control-click செய்து '
-               '<b>Open</b> தேர்ந்தெடுக்கலாம்.)',
-               'அதன் பிறகு வழக்கம்போல் திறக்கும்.']},
-    {**PLATFORMS[2], 'req': 'Ubuntu 22.04+, Debian 12+, Mint 21+ மற்றும் பிற', 'short': 'Ubuntu, Debian, Mint மற்றும் பிற',
-     'buttons': [('.deb டவுன்லோட்', FILES['linuxDeb'], 'linuxDeb'), ('AppImage டவுன்லோட்', FILES['linuxAppImage'], 'linuxAppImage')],
-     'steps': [f'<b>.deb</b> (Ubuntu 22.04+, Debian 12+, Linux Mint 21+): டவுன்லோட் ஆன ஃபோல்டரில் '
-               f'<code>sudo apt install ./{FILES["linuxDeb"]}</code> இயக்கவும்.',
-               f'<b>AppImage</b> (மற்ற Linux): <code>chmod +x {FILES["linuxAppImage"]}</code> இயக்கி, பிறகு ஃபைலைத் திறக்கவும்.']},
-]
-PLATFORMS_HI = [
-    {**PLATFORMS[0], 'req': 'Windows 10, 11 · 64-bit', 'short': 'Windows 10, 11',
-     'buttons': [('Windows के लिए डाउनलोड', FILES['windows'], 'windows')],
-     'steps': ['डाउनलोड हुई फ़ाइल खोलें।',
-               'अगर <b>“Windows protected your PC”</b> दिखे, तो <b>More info</b> दबाएं, फिर <b>Run anyway</b> दबाएं। '
-               'यह संदेश इसलिए आता है क्योंकि इंस्टॉलर पर अभी code-sign नहीं हुआ है।',
-               f'Setup पूरा करें। फिर Start मेन्यू में {NAME} मिल जाएगा।']},
-    {**PLATFORMS[1], 'req': 'macOS 12 Monterey या उसके बाद का', 'short': 'macOS 12 या बाद का',
-     'buttons': [('macOS के लिए डाउनलोड', FILES['mac'], 'mac')],
-     'steps': [f'.dmg फ़ाइल खोलें और {NAME} को Applications में खींचकर छोड़ दें।',
-               f'{NAME} खोलें। अगर macOS कहे कि वह ऐप की जाँच नहीं कर सकता, तो <b>Done</b> दबाएं '
-               '(Move to Bin नहीं)। ऐप पर अभी Apple की notarisation नहीं हुई है, इसलिए ऐसा होता है।',
-               f'<b>System Settings → Privacy &amp; Security</b> खोलें, नीचे {NAME} वाले संदेश में <b>Open Anyway</b> '
-               f'दबाकर पक्का करें। (macOS 14 या पुराने में, Applications में {NAME} पर Control-click करके '
-               '<b>Open</b> चुन सकते हैं।)',
-               'इसके बाद ऐप सामान्य रूप से खुलेगा।']},
-    {**PLATFORMS[2], 'req': 'Ubuntu 22.04+, Debian 12+, Mint 21+ और अन्य', 'short': 'Ubuntu, Debian, Mint और अन्य',
-     'buttons': [('.deb डाउनलोड', FILES['linuxDeb'], 'linuxDeb'), ('AppImage डाउनलोड', FILES['linuxAppImage'], 'linuxAppImage')],
-     'steps': [f'<b>.deb</b> (Ubuntu 22.04+, Debian 12+, Linux Mint 21+): जिस फ़ोल्डर में डाउनलोड हुई है वहाँ '
-               f'<code>sudo apt install ./{FILES["linuxDeb"]}</code> चलाएं।',
-               f'<b>AppImage</b> (अन्य Linux): <code>chmod +x {FILES["linuxAppImage"]}</code> चलाएं, फिर फ़ाइल खोलें।']},
-]
-REC_LABEL = {'en': 'Recommended for you', 'ta': 'உங்கள் கணினிக்கு', 'hi': 'आपके कंप्यूटर के लिए'}
+# The download cards' text (names, requirements, install steps) is in tool/site_text/<code>.py, key 'platforms'.
+PLATFORMS = TEXT['en']['platforms']      # English: used by the download page and the AI-summary file
 
 
 def dl_card(p, full=False, heading='h3', lang='en'):
@@ -337,7 +296,8 @@ def dl_card(p, full=False, heading='h3', lang='en'):
     rec = ' is-recommended' if p['key'] == 'windows' else ''
     return (f'<div class="dl-card{rec}" data-platform="{p["key"]}" data-req-short="{p["short"]}"'
             f'{(" id=" + chr(34) + p["anchor"] + chr(34)) if full else ""}>'
-            f'<div class="dl-card-top">{tile(p["icon"], "neutral")}{badge(REC_LABEL[lang], "brand", cls="rec-badge")}</div>'
+            f'<span class="dl-mark" aria-hidden="true">{icon(p["icon"])}</span>'
+            f'<div class="dl-card-top">{tile(p["icon"], "neutral")}{badge(TEXT[lang]['rec_label'], "brand", cls="rec-badge")}</div>'
             f'<div><{heading}>{p["name"]}</{heading}><p class="dl-req">{p["req"]}</p></div>'
             f'<div class="dl-buttons">{"".join(buttons)}</div>'
             f'<p class="dl-file">{files}</p>'
@@ -345,7 +305,7 @@ def dl_card(p, full=False, heading='h3', lang='en'):
 
 
 def dl_grid(full=False, lang='en'):
-    cards = {'ta': PLATFORMS_TA, 'hi': PLATFORMS_HI}.get(lang, PLATFORMS)
+    cards = TEXT[lang]['platforms']
     return '<div class="dl-grid">' + ''.join(dl_card(p, full, lang=lang) for p in cards) + '</div>'
 
 
@@ -353,18 +313,8 @@ def phone_note(lang='en'):
     """Shown on phones only (site.js): Invoiceo installs on a computer, so the
     visitor sends the download link to themselves. "Send to my computer"
     (the phone's share menu) appears only where the browser can share."""
-    if lang == 'hi':
-        text = (f'आप फ़ोन पर देख रहे हैं। {NAME} Windows, macOS और Linux कंप्यूटर पर चलने वाला ऐप है। लिंक खुद को भेज लें, '
-                'फिर कंप्यूटर पर खोलकर डाउनलोड करें।')
-        share, copy = 'कंप्यूटर पर भेजें', 'लिंक कॉपी करें'
-    elif lang == 'ta':
-        text = (f'நீங்கள் போனில் பார்க்கிறீர்கள். {NAME} கணினியில் (Windows, macOS, Linux) இயங்கும் ஆப். லிங்கை '
-                'உங்களுக்கே அனுப்பி, பிறகு கணினியில் திறந்து டவுன்லோட் செய்யுங்கள்.')
-        share, copy = 'கணினிக்கு அனுப்பு', 'லிங்கை காப்பி செய்'
-    else:
-        text = (f'You’re on a phone. {NAME} runs on Windows, macOS and Linux computers. Send yourself the link, '
-                'then open it on your computer to download.')
-        share, copy = 'Send to my computer', 'Copy link'
+    P = TEXT[lang]['phone_note']
+    text, share, copy = P['text'], P['share'], P['copy']
     return (f'<div class="notice hidden" data-mobile-note>{icon("smartphone")}<div class="stack" style="gap: 12px">'
             f'<span>{text}</span><div class="send-link">'
             f'<button type="button" class="btn btn-primary hidden" data-send-share>{icon("share")}<span>{share}</span></button>'
@@ -376,7 +326,7 @@ def phone_note(lang='en'):
 def hero_send(lang='en'):
     """Phones only (site.js): WhatsApp and Copy link right under the hero button,
     so the visitor does not have to scroll to the download section."""
-    copy = {'ta': 'லிங்கை காப்பி செய்', 'hi': 'लिंक कॉपी करें'}.get(lang, 'Copy link')
+    copy = TEXT[lang]['hero_send_copy']
     return (f'<div class="send-link hidden" data-hero-send>'
             f'<a class="btn btn-secondary" href="#" data-send-whatsapp target="_blank" rel="noopener">{icon("message")}<span>WhatsApp</span></a>'
             f'<button type="button" class="btn btn-ghost" data-send-copy>{icon("copy")}<span>{copy}</span></button></div>')
@@ -405,24 +355,10 @@ def first_steps(level='h3', steps=FIRST_STEPS, word='Step'):
 # ─────────────────────────────── Page frame ────────────────────────────────
 def header(active, home=False, base=False, lang='en'):
     pre = '' if home else '/'
-    if lang == 'hi':
-        links = [('सुविधाएं', '#features', 'features'), ('कैसे काम करता है', '#how-it-works', 'how'),
-                 ('सवाल', '#faq', 'faq'), ('संपर्क', 'contact.html', 'contact')]
-        more = [('स्क्रीनशॉट', '#screenshots', 'screenshots'), ('नया क्या है (English)', 'changelog.html', 'changelog')]
-        words = {'dl': 'मुफ़्त डाउनलोड', 'skip': 'सीधे सामग्री पर जाएं', 'home': f'{NAME} होम',
-                 'main': 'मुख्य', 'menu': 'मेन्यू', 'main_menu': 'मुख्य मेन्यू'}
-    elif lang == 'ta':
-        links = [('வசதிகள்', '#features', 'features'), ('செயல்முறை', '#how-it-works', 'how'),
-                 ('கேள்விகள்', '#faq', 'faq'), ('தொடர்பு', 'contact.html', 'contact')]
-        more = [('ஸ்கிரீன்ஷாட்கள்', '#screenshots', 'screenshots'), ('புதியவை (English)', 'changelog.html', 'changelog')]
-        words = {'dl': 'இலவச டவுன்லோட்', 'skip': 'உள்ளடக்கத்துக்குச் செல்ல', 'home': f'{NAME} முகப்பு',
-                 'main': 'முதன்மை', 'menu': 'மெனு', 'main_menu': 'முதன்மை மெனு'}
-    else:
-        links = [('Features', f'{pre}#features', 'features'), ('How it works', f'{pre}#how-it-works', 'how'),
-                 ('Reviews', 'reviews.html', 'reviews'), ('FAQ', 'faq.html', 'faq'), ('Contact', 'contact.html', 'contact')]
-        more = [('Compare', 'compare.html', 'compare'), ('Screenshots', f'{pre}#screenshots', 'screenshots'), ('What’s new', 'changelog.html', 'changelog')]
-        words = {'dl': 'Download free', 'skip': 'Skip to content', 'home': f'{NAME} home',
-                 'main': 'Main', 'menu': 'Menu', 'main_menu': 'Main menu'}
+    H = TEXT[lang]['header']
+    links = [(t, h.replace('{pre}', pre), k) for t, h, k in H['links']]
+    more = [(t, h.replace('{pre}', pre), k) for t, h, k in H['more']]
+    words = H['words']
     others = [(c, v) for c, v in LANG_LINKS.items() if c != lang]
     switch = ''.join(f'<a class="lang-switch" href="{h}" hreflang="{c}" lang="{c}" title="{ti}">{lab}</a>'
                      for c, (h, lab, ti) in others)
@@ -450,67 +386,32 @@ def header(active, home=False, base=False, lang='en'):
 
 def footer(home=False, lang='en'):
     pre = '' if home else '/'
+    F = TEXT[lang]['footer']
     col = lambda title, items: (f'<div><h2>{title}</h2><ul>' + ''.join(f'<li{" data-block" if "data-" in a else ""}><a {a}>{t}</a></li>' for t, a in items)
                                 + '</ul></div>')
-    support = 'data-href="forms.support" data-hide-empty target="_blank" rel="noopener"'
-    whatsapp = 'data-whatsapp target="_blank" rel="noopener"'
-    feedback = 'data-href="forms.feedback" data-hide-empty target="_blank" rel="noopener"'
-    if lang == 'hi':
-        cols = [('ऐप', [('सुविधाएं', 'href="#features"'), ('कैसे काम करता है', 'href="#how-it-works"'),
-                         ('स्क्रीनशॉट', 'href="#screenshots"'), ('ग्राहकों की राय', 'href="#customers"'),
-                         ('डाउनलोड', 'href="#download"'),
-                         ('नया क्या है (English)', 'href="changelog.html"')]),
-                ('मदद', [('सवाल (English)', 'href="faq.html"'), ('संपर्क', 'href="contact.html"'),
-                         ('सहायता अनुरोध', support), ('WhatsApp', whatsapp), ('सुझाव', feedback),
-                         ('अपनी ज़रूरत के फ़ीचर (सशुल्क)', 'href="customization.html"')]),
-                ('कानूनी', [('लाइसेंस', 'href="licenses.html"'), ('गोपनीयता', 'href="privacy.html"'),
-                           ('नियम', 'href="terms.html"'), ('llms.txt', 'href="llms.txt" lang="en"')])]
-        tagline = 'Windows, macOS और Linux के लिए मुफ़्त, ओपन सोर्स बिलिंग सॉफ़्टवेयर।'
-        coffee = 'मुझे एक कॉफ़ी पिलाएं'
-        credit = (f'© <span data-year>2026</span> {BUSINESS}. Invoiso पर आधारित, '
-                  '<a href="licenses.html">MIT License</a>, © 2025 ANOOP P.')
-    elif lang == 'ta':
-        cols = [('ஆப்', [('வசதிகள்', 'href="#features"'), ('செயல்முறை', 'href="#how-it-works"'),
-                         ('ஸ்கிரீன்ஷாட்கள்', 'href="#screenshots"'), ('வாடிக்கையாளர் கருத்து', 'href="#customers"'),
-                         ('டவுன்லோட்', 'href="#download"'),
-                         ('புதியவை (English)', 'href="changelog.html"')]),
-                ('உதவி', [('கேள்விகள் (English)', 'href="faq.html"'), ('தொடர்பு', 'href="contact.html"'),
-                          ('உதவி கோரிக்கை', support), ('WhatsApp', whatsapp), ('கருத்து', feedback),
-                          ('தனிப்பயன் வசதிகள் (கட்டணம்)', 'href="customization.html"')]),
-                ('சட்டம்', [('உரிமங்கள்', 'href="licenses.html"'), ('தனியுரிமை', 'href="privacy.html"'),
-                            ('விதிமுறைகள்', 'href="terms.html"'), ('llms.txt', 'href="llms.txt" lang="en"')])]
-        tagline = 'Windows, macOS, Linux கணினிகளுக்கான இலவச, ஓப்பன் சோர்ஸ் பில்லிங் சாஃப்ட்வேர்.'
-        coffee = 'ஒரு காபி வாங்கித் தாருங்கள்'
-        credit = (f'© <span data-year>2026</span> {BUSINESS}. Invoiso-வை அடிப்படையாகக் கொண்டது, '
-                  '<a href="licenses.html">MIT License</a>, © 2025 ANOOP P.')
-    else:
-        cols = [('Product', [('Features', f'href="{pre}#features"'), ('How it works', f'href="{pre}#how-it-works"'),
-                             ('Screenshots', f'href="{pre}#screenshots"'), ('Compare with others', 'href="compare.html"'), ('Customer reviews', 'href="reviews.html"'),
-                             ('Download', 'href="download.html"'),
-                             ('What’s new', 'href="changelog.html"')]),
-                ('Help', [('FAQ', 'href="faq.html"'), ('Contact', 'href="contact.html"'), ('Support request', support),
-                          ('WhatsApp', whatsapp), ('Feedback', feedback), ('Custom features (paid)', 'href="customization.html"')]),
-                ('Legal', [('Licenses', 'href="licenses.html"'), ('Privacy', 'href="privacy.html"'), ('Terms', 'href="terms.html"'),
-                           ('llms.txt', 'href="llms.txt"')])]
-        tagline = 'Free, open-source billing software for Windows, macOS and Linux.'
-        coffee = 'Buy me a coffee'
-        credit = (f'© <span data-year>2026</span> {BUSINESS}. Built on Invoiso, released under the '
-                  '<a href="licenses.html">MIT License</a>, © 2025 ANOOP P.')
+    cols = [(title, [(t, a.replace('{pre}', pre)) for t, a in items]) for title, items in F['cols']]
+    # the Languages column lists every home page, from the registry
+    cols.append((F['lang_title'], [(TEXT[c]['shell']['switch']['label'], f'href="{HOME_HREF[c]}" hreflang="{c}" lang="{c}"') for c in HOME_LANGS]))
+    tagline, coffee, foot_dl, foot_top, credit = F['tagline'], F['coffee'], F['foot_dl'], F['foot_top'], F['credit']
     return f'''<footer class="site-footer">
   <div class="wrap">
     <div class="foot">
       <div class="foot-brand">
         <img src="assets/images/logo.png" alt="{NAME}" width="196" height="68" loading="lazy">
         <p>{tagline}</p>
-        <a class="coffee" href="{COFFEE}" target="_blank" rel="noopener">{icon('coffee')}{coffee}</a>
+        <div class="foot-actions">
+          {btn(foot_dl, '#download' if home else 'download.html', 'primary', '', 'download')}
+          <a class="coffee" href="{COFFEE}" target="_blank" rel="noopener">{icon('coffee')}{coffee}</a>
+        </div>
       </div>
       {(chr(10) + '      ').join(col(t, items) for t, items in cols)}
     </div>
     <div class="foot-bottom">
       <span>{credit}</span>
-      <a href="mailto:{EMAIL}">{EMAIL}</a>
+      <span class="foot-end"><a class="foot-mail" href="mailto:{EMAIL}">{EMAIL}</a><a class="to-top" href="#" aria-label="{foot_top}">{icon('arrow')}<span>{foot_top}</span></a></span>
     </div>
   </div>
+  <div class="foot-mark" aria-hidden="true">{NAME}</div>
 </footer>'''
 
 
@@ -563,7 +464,7 @@ def page(filename, title, description, active, body, jsonld=None, noindex=False,
   {'<meta name="robots" content="noindex">' if noindex else f'<link rel="canonical" href="{canonical}">'}{alternates}
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="{NAME}">
-  <meta property="og:locale" content="{ {'ta': 'ta_IN', 'hi': 'hi_IN'}.get(lang, 'en_IN') }">
+  <meta property="og:locale" content="{TEXT[lang]['shell']['og_locale']}">
   <meta property="og:title" content="{esc(full_title)}">
   <meta property="og:description" content="{esc(description)}">
   <meta property="og:url" content="{canonical}">
@@ -577,7 +478,7 @@ def page(filename, title, description, active, body, jsonld=None, noindex=False,
   <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png">
   <link rel="manifest" href="site.webmanifest">
-  {FONTS_TA if lang == 'ta' else (FONTS_HI if lang == 'hi' else FONTS)}
+  {FONT_LINKS[TEXT[lang]['shell']['fonts']]}
   <link rel="stylesheet" href="{asset('assets/css/site.css')}">{ld}
 </head>
 <body>
@@ -616,7 +517,7 @@ ORG = {'@type': 'Organization', '@id': ORG_ID, 'name': BUSINESS, 'email': EMAIL,
 APP_LANGS = ['en', 'ta', 'hi', 'ne', 'fr', 'es', 'zh', 'bo']
 WEBSITE_LD = {'@context': 'https://schema.org', '@type': 'WebSite', '@id': SITE + '/#website', 'name': NAME,
               'url': SITE + '/', 'inLanguage': list(HOMES),
-              'description': f'{NAME}: free, open-source offline billing and GST invoice software for Windows, macOS and Linux.',
+              'description': f'{NAME}: free, open-source offline invoicing software for Windows, macOS and Linux, with your own tax rates (GST, VAT or sales tax) and your choice of 156 currencies.',
               'publisher': {'@id': ORG_ID}}
 
 
@@ -638,7 +539,7 @@ def software_ld(description, groups, shot=lambda n: n):
         'downloadUrl': SITE + '/download.html',
         'releaseNotes': SITE + '/changelog.html',
         'image': SITE + '/assets/images/og-image.png',
-        'screenshot': [f'{SITE}/assets/images/screens/{shot(n)}.png' for n, _, _ in screen_cards],
+        'screenshot': [f'{SITE}/assets/images/screens/{shot(n)}.png' for n in screen_cards],
         'featureList': [html.unescape(strip_tags(item)) for _, _, items, _ in groups for item in items],
         'inLanguage': APP_LANGS,
         'isAccessibleForFree': True,
@@ -682,99 +583,42 @@ def testimonial_card(t, lang='en', link=True):
             f'{badge(t["tag"][lang], "teal", "tool")}</figure>')
 
 
-# ─────────────────────────────────── Home ──────────────────────────────────
-hero = f'''<section class="hero" aria-labelledby="hero-title">
-  <div class="wrap hero-grid">
-    <div class="hero-copy">
-      <div class="badges">{badge('Free &amp; open source', 'brand', 'code')}{badge('Windows · macOS · Linux', 'neutral', 'monitor')}</div>
-      <h1 class="display" id="hero-title"><em>Free</em> billing software that works offline</h1>
-      <p class="lead">Create GST invoices, quotations and receipts on your own computer. {NAME} is a free, open-source desktop app — no invoice limit, no subscription, no sign-up, and your business data never leaves your PC.</p>
-      <div class="cta-row">
-        <a class="btn btn-primary btn-lg" href="#download" data-os-download><span data-os-icon>{icon('download')}</span><span data-os-label>Download free</span></a>
-        {btn('See the features', '#features', 'secondary', 'lg')}
-      </div>
-      {hero_send('en')}
-      <p class="hero-meta" data-hero-meta>Free · Version <span data-version>{VERSION}</span> · For Windows, macOS and Linux</p>
-      {checks(['Free forever', 'No invoice limit', 'Works offline', 'No sign-up'], 'checks-inline')}
-    </div>
-    <div class="hero-visual">
-      {window('create-invoice', f'The {NAME} New Invoice screen: customer Kannan, four grocery items, GST and a total of Rs. 5,829.50', cls='hero-shot', lazy=False, sizes='(max-width: 1100px) 100vw, 700px')}
-      {receipt('hero-receipt')}
-      <span class="hero-chip">{badge('Data stays on your computer', 'teal', 'lock')}</span>
-    </div>
-  </div>
-</section>'''
+# Small decorative pictures for the "Why" cards, keyed by the card's icon (same in every language).
+# They carry no words that need translating, and are hidden from screen readers.
+WHY_ART = {
+    'gift': '<div class="art art-free" aria-hidden="true"><span class="big"><b>₹0</b><b>$0</b><b>€0</b><b>£0</b></span>'
+            '<span class="coin c1"><i>₹</i><i>$</i><i>€</i><i>£</i></span><span class="coin c2"><i>$</i><i>€</i><i>£</i><i>₹</i></span>'
+            '<span class="coin c3"><i>€</i><i>£</i><i>₹</i><i>$</i></span><span class="inf">∞</span></div>',
+    'wifi-off': '<div class="art art-offline" aria-hidden="true"><i></i><i></i><i></i><b></b></div>',
+    'lock': '<div class="art art-data" aria-hidden="true"><span></span><span></span><span></span><b></b></div>',
+    'code': '<div class="art art-code" aria-hidden="true"><span style="width:58%"></span><span style="width:82%"></span>'
+            '<span style="width:46%"></span><span style="width:70%"></span><em>MIT</em></div>',
+    'monitor': '<div class="art art-os" aria-hidden="true"><em>Windows</em><em>macOS</em><em>Linux</em></div>',
+    'repeat': '<div class="art art-export" aria-hidden="true"><em>CSV</em><em>PDF</em><em class="loop">↻</em></div>',
+}
 
-FACTS = [('percent', 'GST &amp; UPI QR', 'CGST, SGST, IGST, HSN/SAC'), ('printer', 'A4 &amp; thermal', 'A4, A5, A6 and 58/80 mm'),
-         ('globe', '8 languages', 'including Tamil and Hindi'), ('database', 'Backup &amp; restore', 'move to a new PC any time'),
-         ('code', 'MIT License', 'open-source licence')]
-facts = ('<div class="facts-strip"><ul class="wrap facts">'
-         + ''.join(f'<li class="fact">{tile(i, "teal", "md")}<div><b>{v}</b><span>{l}</span></div></li>' for i, v, l in FACTS)
-         + '</ul></div>')
 
-WHY = [('gift', 'Free forever', 'No subscription, no trial, no paid tier. Every feature is included, for as long as you use it.'),
-       ('wifi-off', 'Works offline', 'Bill, print and run reports with no internet connection. Internet down? Keep billing.'),
-       ('lock', 'Your data stays with you', 'Customers, products and invoices are saved on your computer, not on someone else’s server.'),
-       ('code', 'Open source', 'The source code is public under the MIT License. Anyone can check what the app does.'),
-       ('monitor', 'Windows, macOS and Linux', 'One app for the computers you already have, with the same features on each.'),
-       ('repeat', 'No lock-in', 'Back up any time, restore on another computer, and export your lists to CSV or PDF.')]
-why = section(section_head(f'Why {NAME}', 'Billing software without the monthly bill',
-                           'Everything a small business needs to bill customers is included — and it all runs on your own computer.', 'why-title')
-              + '<div class="grid-auto mt-4">' + ''.join(f'<div class="card">{tile(i)}<h3>{t}</h3><p>{d}</p></div>' for i, t, d in WHY) + '</div>',
-              'why', 'section-flush', 'why-title')
+def why_card(i, t, d):
+    return f'<div class="card why-card why-{i}">{tile(i)}<h3>{t}</h3><p>{d}</p>{WHY_ART.get(i, "")}</div>'
 
-HOW = [('01', 'Set up your business', 'Add your company name, logo, GSTIN, bank details and UPI ID once.'),
-       ('02', 'Add customers and products', 'Import a list from CSV, or add them as you bill. Barcode scanners work too.'),
-       ('03', 'Create an invoice', 'Pick the customer and search or scan items. Tax and totals are worked out for you.'),
-       ('04', 'Print, save or share', 'Print on A4 or a thermal printer, or save a PDF to send to your customer.'),
-       ('05', 'Track payments', 'Record full or part payments, print receipts and see who still owes you.')]
-how = section('<div class="flow"><div class="flow-copy">'
-              + section_head('How it works', 'From setup to payment in five steps',
-                             'Invoiceo follows the way a shop already bills — just faster and tidier.', 'how-title', left=True)
-              + '<ol class="steps">' + ''.join(f'<li class="step"><span class="step-num">{n}</span><div><h3>{t}</h3><p>{b}</p></div></li>' for n, t, b in HOW) + '</ol></div>'
-              + '<div>' + window('invoices', f'The {NAME} Invoices list: paid, unpaid and partly paid invoices with the amount still outstanding',
-                                 sizes='(max-width: 1100px) 100vw, 700px') + '</div></div>',
-              'how-it-works', 'section-subtle', 'how-title')
 
-GROUPS = [
-    ('file', 'Invoicing', ['Six invoice designs plus a thermal receipt layout', 'Print or save PDF on A4, A5, A6 or 58/80 mm',
-                           'Automatic invoice numbering with your prefix', 'Discounts, taxes and extra charges',
-                           'Your own custom fields on invoices', 'Save unfinished invoices as drafts'], 'span-2'),
-    ('briefcase', 'Running the business', ['Quotations that become invoices in one click', 'Full and part payments, with receipts',
-                                           'Customers with outstanding balances', 'Products and services, stock, batch and expiry',
-                                           'Sales, tax, receivables, daily and stock reports', 'Import and export lists as CSV'], 'span-2'),
-    ('percent', 'India &amp; GST', ['Your GSTIN and your customer’s on every invoice', 'HSN/SAC codes per product',
-                                    'CGST + SGST or IGST worked out for you', 'Tax Invoice or Bill of Supply titles',
-                                    'Your UPI QR code printed on the bill'], 'span-2'),
-    ('hard-drive', 'Local-first and private', ['Works with no internet connection', 'Data saved on your own computer',
-                                               'Backup and restore in one click', 'Several companies on one computer',
-                                               'Staff logins with admin or user roles', 'No online account needed'], 'span-3'),
-    ('globe', 'Ready for anywhere', ['Choose your currency', 'English, Tamil, Hindi, Nepali, French, Spanish, Chinese and Tibetan (partly translated)',
-                                     'Tamil text prints correctly on PDFs and receipts', 'USB barcode scanners',
-                                     'Thermal receipts can print automatically after each sale'], 'span-3'),
-]
-features = section(section_head('Features', 'All the billing tools a small shop needs', 'Grouped the way you work — and every one of them is free.', 'feat-title')
-                   + '<div class="bento mt-4">' + ''.join(f'<div class="group-card {c}"><div class="group-card-head">{tile(i)}<h3>{t}</h3></div>{checks(items)}</div>'
-                                                          for i, t, items, c in GROUPS) + '</div>',
-                   'features', '', 'feat-title')
 
-SHOTS = [('dashboard', 'Dashboard', 'Money collected and still due, sales by month, invoice status and recent invoices.'),
-         ('create-invoice', 'New invoice', 'Customer, items, GST and the total on one screen.'),
-         ('invoices', 'Invoices', 'See what’s paid, unpaid or part paid, and find any bill fast.'),
-         ('customers', 'Customers', 'Phone, GSTIN and what each customer still owes.'),
-         ('products', 'Products', 'Prices, HSN codes, tax and stock levels, with low stock easy to spot.'),
-         ('reports', 'Reports', 'Billed, collected and outstanding money month by month.')]
-# Sample documents printed by the real PDF code. Made with
-#   flutter test tool/screenshots/sample_documents_test.dart
-#   swift tool/screenshots/pdf_to_png.swift build/sample_documents/invoice-a4.pdf ../invoiceo-website/assets/images/docs/invoice-a4.png 1240
-#   swift tool/screenshots/pdf_to_png.swift build/sample_documents/receipt-80mm.pdf ../invoiceo-website/assets/images/docs/receipt-80mm.png 640
-DOCS = os.path.join(OUT, 'assets', 'images', 'docs')
-DOC_SHOTS = [
-    ('invoice-a4', 'paper-a4', 'Printed invoice (A4)', 'A GST invoice in the Classic design, as your customer receives it.',
-     f'A sample {NAME} A4 GST invoice: Sri Murugan Traders billing Kannan Stores for six items with CGST and SGST, total Rs. 7019.10'),
-    ('receipt-80mm', 'paper-receipt', 'Thermal receipt (80 mm)', 'A counter receipt with Tamil item names, printed correctly.',
-     'A sample 80 mm thermal receipt with three Tamil item names, paid in full, total Rs. 1036.60'),
-]
+# Features cards: a colour accent, a counter and a small picture for each group (same icons in every language).
+# The pictures use symbols, numbers and universal abbreviations only, and are hidden from screen readers.
+GROUP_ART = {
+    'file': '<div class="gart gart-designs" aria-hidden="true">' + ''.join(f'<i class="d{n}"></i>' for n in range(1, 7)) + '<b class="th"></b></div>',
+    'briefcase': '<div class="gart gart-biz" aria-hidden="true"><span><i></i>₹ 4,495</span><span><i></i>₹ 962</span>'
+                 '<span><i class="due"></i>₹ 1,426</span><em class="bars"><u></u><u></u><u></u><u></u><u></u></em></div>',
+    'percent': '<div class="gart gart-gst" aria-hidden="true"><span>CGST 9%</span><span>SGST 9%</span><span class="alt">IGST 18%</span></div>',
+    'hard-drive': '<div class="gart gart-local" aria-hidden="true"><span class="f"></span><span class="f"></span><span class="f"></span><b></b></div>',
+    'globe': '<div class="gart gart-world" aria-hidden="true"><span>EN</span><span>த</span><span>हि</span><span>₹</span><span>$</span><span>€</span></div>',
+}
+
+
+def group_card(i, t, items, c):
+    return (f'<div class="group-card gc gc-{i} {c}"><div class="group-card-head">{tile(i)}<h3>{t}</h3>'
+            f'<span class="gc-count" aria-hidden="true">{len(items):02d}</span></div>{checks(items)}{GROUP_ART.get(i, "")}</div>')
+
 
 
 def png_size(path):
@@ -819,134 +663,79 @@ AMMA_WORK = [
 ]
 
 
+# Drawn printers for the sample documents (shown only when the screens are tabs; the page or receipt is fed out of them).
+PRINTERS = {
+    'paper-a4': (
+        '<svg class="printer-art printer-a4" viewBox="0 0 600 160" aria-hidden="true" focusable="false">'
+        '<defs><linearGradient id="pg-a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7f9fd"/><stop offset="1" stop-color="#cfd7e6"/></linearGradient>'
+        '<linearGradient id="pg-b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e4e9f3"/><stop offset="1" stop-color="#b9c3d6"/></linearGradient></defs>'
+        '<rect x="34" y="132" width="60" height="16" rx="6" fill="#8e9ab2"/><rect x="506" y="132" width="60" height="16" rx="6" fill="#8e9ab2"/>'
+        '<rect x="14" y="46" width="572" height="94" rx="24" fill="url(#pg-a)" stroke="#bcc6d9" stroke-width="2"/>'
+        '<rect x="34" y="34" width="532" height="30" rx="14" fill="url(#pg-b)" stroke="#bcc6d9" stroke-width="2"/>'
+        '<rect x="48" y="42" width="504" height="13" rx="6.5" fill="#0c1226"/>'
+        '<rect x="48" y="52" width="504" height="3" fill="#000" opacity=".5"/>'
+        '<rect x="96" y="104" width="300" height="9" rx="4.5" fill="#cbd3e3"/>'
+        '<rect x="438" y="82" width="116" height="40" rx="9" fill="#18213b"/>'
+        '<circle class="led" cx="458" cy="102" r="5.5" fill="#2fe39a"/><circle cx="480" cy="102" r="5.5" fill="#5b6a8c"/>'
+        '<rect x="500" y="95" width="40" height="14" rx="4" fill="#2a3556"/></svg>'),
+    'paper-receipt': (
+        '<svg class="printer-art printer-thermal" viewBox="0 0 360 170" aria-hidden="true" focusable="false">'
+        '<defs><linearGradient id="pg-t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a4668"/><stop offset="1" stop-color="#151c33"/></linearGradient></defs>'
+        '<rect x="20" y="146" width="44" height="14" rx="6" fill="#0d1224"/><rect x="296" y="146" width="44" height="14" rx="6" fill="#0d1224"/>'
+        '<rect x="8" y="54" width="344" height="100" rx="20" fill="url(#pg-t)"/>'
+        '<rect x="8" y="54" width="344" height="1.5" fill="#fff" opacity=".28"/>'
+        '<rect x="36" y="38" width="288" height="30" rx="12" fill="#222c4a"/>'
+        '<rect x="52" y="46" width="256" height="12" rx="6" fill="#04070f"/>'
+        '<path d="M52 58h256" stroke="#000" stroke-width="3" opacity=".5"/>'
+        '<rect x="30" y="112" width="190" height="8" rx="4" fill="#2c3858"/>'
+        '<circle class="led" cx="292" cy="100" r="6" fill="#2fe39a"/><circle cx="292" cy="124" r="7" fill="#2c3858" stroke="#4a5880" stroke-width="2"/></svg>'),
+}
+
+
 def paper(name, cls, alt):
     src = f'assets/images/docs/{name}.png'
     w, h = png_size(os.path.join(OUT, src))
-    return (f'<div class="paper {cls}"><a href="{src}" target="_blank" rel="noopener" title="Open full size">'
-            f'<img src="{src}" width="{w}" height="{h}" alt="{esc(alt)}" loading="lazy" decoding="async"></a></div>')
+    v = asset(src)  # path?v=<content hash>: a changed picture is fetched again, not shown from a visitor's cache
+    return (f'<div class="paper {cls}"><a href="{v}" target="_blank" rel="noopener" title="Open full size">'
+            f'<img src="{v}" width="{w}" height="{h}" alt="{esc(alt)}" loading="lazy" decoding="async"></a>'
+            f'{PRINTERS.get(cls, "")}</div>')
 
 
-screen_cards = [(n, t, c) for n, t, c in SHOTS if os.path.exists(os.path.join(SCREENS, n + '.png'))]
-doc_cards = [d for d in DOC_SHOTS if os.path.exists(os.path.join(DOCS, d[0] + '.png'))]
-shots = section(section_head('Screenshots', 'See every screen before you install',
-                             f'Real screens from {NAME} and documents it printed, filled with a sample shop’s data.', 'shots-title')
-                + '<div class="shots mt-4">'
-                + ''.join(f'<figure class="shot{" shot-wide" if i == 0 and doc_cards else ""}">{window(n, f"The {NAME} {t} screen")}'
-                          f'<figcaption><b>{t}</b><span>{c}</span></figcaption></figure>' for i, (n, t, c) in enumerate(screen_cards))
-                + ''.join(f'<figure class="shot">{paper(n, cls, alt)}<figcaption><b>{t}</b><span>{c}</span></figcaption></figure>'
-                          for n, cls, t, c, alt in doc_cards)
-                + '</div>',
-                'screenshots', 'section-subtle', 'shots-title')
 
-WHO = [('shopping-bag', 'Kirana and retail shops', 'Fast counter billing with barcode scanning and thermal receipts.'),
-       ('package', 'Pharmacies and medical shops', 'Batch numbers and expiry dates on products, with low-stock warnings.'),
-       ('truck', 'Traders and wholesalers', 'GST invoices with HSN codes, stock levels and customer balances.'),
-       ('user', 'Freelancers and consultants', 'Clean PDF quotations and invoices, and a clear view of who has paid.'),
-       ('tool', 'Service and repair shops', 'Quick bills for parts and labour, part payments and receipts.'),
-       ('briefcase', 'Any small business', 'Several companies and staff logins on one computer — all free.')]
-who = section(section_head('Who it’s for', 'Built for the way small businesses work', hid='who-title')
-              + '<div class="grid-auto-wide mt-4">' + ''.join(f'<div class="usecase">{tile(i, "neutral")}<div><h3>{t}</h3><p>{d}</p></div></div>' for i, t, d in WHO) + '</div>',
-              'who', '', 'who-title')
+# ───────────── "How it works": the steps drive a picture that changes with the step ─────────────
+def stage_docs(a4_alt, receipt_alt):
+    """Step 4's picture: the printed A4 invoice and the 80 mm thermal receipt side by side."""
+    a4, rc = 'assets/images/docs/invoice-a4.png', 'assets/images/docs/receipt-80mm.png'
+    aw, ah = png_size(os.path.join(OUT, a4))
+    rw, rh = png_size(os.path.join(OUT, rc))
+    return (f'<div class="doc-stage"><img class="ds-a4" src="{asset(a4)}" width="{aw}" height="{ah}" alt="{esc(a4_alt)}" loading="lazy" decoding="async">'
+            f'<img class="ds-rc" src="{asset(rc)}" width="{rw}" height="{rh}" alt="{esc(receipt_alt)}" loading="lazy" decoding="async"></div>')
+
+
+def how_flow(head_html, steps, pictures, word, extra=''):
+    """The steps on the left, one picture on the right. site.js switches the picture when a step is
+    clicked or scrolled to. Every picture is also placed inside its step, shown on phones instead."""
+    lis = ''.join(f'<li class="step{" is-active" if i == 0 else ""}" data-step="{i}" tabindex="0"><span class="step-num">{n}</span>'
+                  f'<div><h3>{t}</h3><p>{b}</p><div class="step-shot">{pictures[i]}</div></div></li>' for i, (n, t, b) in enumerate(steps))
+    stage = ''.join(f'<div class="stage-item{" is-active" if i == 0 else ""}" data-stage="{i}"{"" if i == 0 else " inert"}>{pic}</div>' for i, pic in enumerate(pictures))
+    dots = ''.join(f'<button type="button" class="stage-dot{" is-active" if i == 0 else ""}" data-step="{i}" aria-label="{word} {i + 1}"></button>'
+                   for i in range(len(pictures)))
+    return section('<div class="flow flow-steps"><div class="flow-copy">' + head_html + f'<ol class="steps">{lis}</ol>{extra}</div>'
+                   f'<div class="flow-stage"><div class="stage-sticky"><div class="stage">{stage}</div><div class="stage-dots">{dots}</div></div></div></div>',
+                   'how-it-works', 'section-subtle', 'how-title')
+
+
+_HW = '(max-width: 900px) 100vw, 640px'
+
+def usecase_card(n, i, t, d):
+    """A "who it is for" card: a colour accent per business, a big faded icon behind it, and a number."""
+    return (f'<div class="usecase uc uc-{i}">{tile(i, "neutral")}<div><h3>{t}</h3><p>{d}</p></div>'
+            f'<span class="uc-mark" aria-hidden="true">{icon(i)}</span><span class="uc-n" aria-hidden="true">{n:02d}</span></div>')
+
+
 
 LANGS = [('English', ''), ('தமிழ்', 'ta'), ('हिन्दी', 'hi'), ('Nepali', ''), ('French', ''), ('Spanish', ''), ('Chinese', ''), ('Tibetan', '')]
 langs = ''.join(f'<span class="chip"{(" lang=" + chr(34) + l + chr(34)) if l else ""}>{t}</span>' for t, l in LANGS)
-INDIA = ['GSTIN, HSN/SAC and CGST + SGST or IGST', 'UPI QR code on your invoices', 'Amounts in rupees by default', 'Tamil and Hindi on screen and on paper']
-WORLD = ['Pick the currency you bill in', 'Eight app languages (Tibetan partly translated)', 'A4, A5, A6 and 58/80 mm paper',
-         'GST fields stay out of the way when you don’t need them']
-# The energy bill first, the customer's words under it (as on the Reviews
-# page and the Tamil home).
-customers = section(
-    '<div class="review-story stack">'
-    + section_head('Customers', 'An energy bill built for Green &amp; Green Agri Solutions',
-                   'Their monthly power-sale bill for wind and solar generation: units, rate, deductions and net amount, '
-                   'ready in a few clicks each month.', 'tm-title')
-    + f'<p class="center">{badge("Custom feature", "brand", "tool")}</p>'
-    + f'<figure class="doc-full"><a href="{_energy_png}" target="_blank" rel="noopener" title="Open full size">'
-      f'<img src="{_energy_png}" width="{_ew}" height="{_eh}" alt="A sample energy bill made with {NAME}: units generated '
-      f'and allotted, net units at the rate, deductions and the net amount" loading="lazy" decoding="async"></a>'
-      '<figcaption>Shown with sample data: every name and number on it is made up.</figcaption></figure>'
-    + ''.join(testimonial_card(t) for t in TESTIMONIALS)
-    + f'<div class="card stack"><h3 class="h4">What this bill does</h3>{checks(ENERGY_WORK)}</div>'
-    + '<div class="stack" style="align-items: center; text-align: center; gap: 14px">'
-      '<p>Want a bill like this for your business? It is a paid service, and every request is quoted on its own.</p>'
-      '<div class="cta-row" style="justify-content: center">'
-      f'<span data-block>{btn("Ask on WhatsApp", "#", "primary", "", "message", attrs=" data-whatsapp target=" + chr(34) + "_blank" + chr(34) + " rel=" + chr(34) + "noopener" + chr(34))}</span>'
-      f'{btn("Request a customization", "customization.html#request", "secondary", "", "arrow")}'
-      '</div><p class="small"><a href="reviews.html">Read all reviews</a></p></div>'
-    + '</div>',
-    'customers', 'section-subtle', 'tm-title')
-
-local_global = section(section_head('Local and global', 'Built for local businesses. Ready for the world.',
-                                    f'{NAME} is made in India for Indian billing rules, and works just as well anywhere else.', 'lg-title')
-                       + '<div class="split split-stretch mt-4">'
-                       + f'<div class="group-card is-subtle"><div class="group-card-head">{tile("percent")}<h3>Made for India</h3></div>{checks(INDIA)}</div>'
-                       + f'<div class="group-card is-subtle"><div class="group-card-head">{tile("globe")}<h3>Works anywhere</h3></div>{checks(WORLD)}'
-                       + f'<div class="stack" style="gap:10px"><p class="chips-label">App languages</p><div class="chips">{langs}</div></div></div>'
-                       + '</div>', 'local-global', '', 'lg-title')
-
-privacy = f'''<section class="section section-night on-dark" id="privacy" aria-labelledby="priv-title">
-  <div class="wrap split">
-    <div>
-      {section_head('Privacy', 'Your business data belongs to you.', f'{NAME} keeps your business data on your computer. Nothing about your customers, prices or sales is sent to us or anyone else.', 'priv-title', left=True)}
-      {checks(['Works without internet', 'Saved on your computer', 'No account, no subscription', 'Backups when you choose'], 'checks-grid mt-3')}
-      <p class="mt-3 small"><a href="privacy.html" style="color: var(--night-accent)">Read the privacy policy</a></p>
-    </div>
-    <div class="vault">
-      <div class="vault-head">{tile('monitor', 'night')}<div><b>Your computer</b><span>Everything {NAME} stores lives here</span></div></div>
-      <ul class="vault-items">{''.join(f'<li>{icon(i)}{t}</li>' for i, t in [('file', 'Invoices'), ('users', 'Customers'), ('package', 'Products'), ('database', 'Backups')])}</ul>
-      <hr>
-      <p class="vault-foot">{icon('cloud-off')}<span><b>Your business data is never uploaded.</b> There is no {NAME} cloud and no account to sign in to.</span></p>
-    </div>
-  </div>
-</section>'''
-
-open_source = section(
-    '<div class="split"><div>'
-    + section_head('Open source', 'Built in the open', f'{NAME}’s source code is public under the MIT License. You don’t have to take our word for anything.', 'os-title', left=True)
-    + checks(['Read exactly how the app handles your data', 'Free to use, copy and change under the MIT License', 'Use it free, on as many computers as you like'], 'mt-3')
-    + '</div><div class="stack">'
-    + f'<div class="repo-card"><div class="group-card-head">{tile("code")}<h3 class="h4">MIT License</h3></div>'
-    + f'<p>{NAME} is built on Invoiso by ANOOP P, which is also released under the MIT License. '
-      'Read the licence text on the <a href="licenses.html">Licenses page</a>.</p>'
-    + f'<div class="badges">{badge("Open source", "neutral", "code")}{badge("Latest release <span data-version>" + VERSION + "</span>", "neutral", "download")}</div></div>'
-    + f'<div class="card card-note"><h3 class="h4">How can it be free?</h3><p>{NAME} is made by {BUSINESS} and built on Invoiso, an MIT-licensed project. '
-      'There is no paid version. Development is supported by optional <a href="customization.html">paid customization</a> for businesses that need '
-      f'something special, and by <a href="{COFFEE}" target="_blank" rel="noopener">donations</a>.</p></div>'
-    + '</div></div>', 'open-source', '', 'os-title')
-
-download = section(
-    section_head('Download', 'Start billing for free',
-                 f'{NAME} <span data-version>{VERSION}</span> · released <span data-release-date>{RELEASE_DATE}</span> · <a href="changelog.html">What’s new</a>', 'dl-title')
-    + f'<div class="mt-2">{TRUST}</div><div class="mt-2">{PHONE_NOTE}</div>'
-    + f'<div class="mt-3">{dl_grid()}</div>'
-    + f'<div class="mt-2">{CHECKSUMS}</div>'
-    + f'<p class="center small mt-1"><a href="download.html">Step-by-step install help</a></p>'
-    + '<h3 class="h3 center" style="margin: 72px 0 20px">Up and running in minutes</h3>'
-    + first_steps('h4'),
-    'download', 'section-subtle', 'dl-title')
-
-HOME_FAQ = [
-    ('Is Invoiceo really free?', 'Yes. Every feature is free, with no trial, subscription or paid tier. Install it on as many computers as you like.', True),
-    ('Is Invoiceo open source?', 'Yes. It is released under the MIT License, so anyone can read, use and change the code.', True),
-    ('Is there any limit on invoices?', 'No. There is no limit on invoices, customers or products, and no trial that ends. Some other free billing apps cap the free plan; see <a href="compare.html">how Invoiceo compares</a>.', False),
-    ('Does it work offline?', 'Yes. You only need the internet to download it. Billing, printing and reports all work offline.', True),
-    ('Do I need an account?', 'No online account. The app has its own login on your computer, so each person can have a password.', True),
-    ('Where is my data stored?', 'On your computer, in Invoiceo’s data folder. Use <b>Settings → Backup</b> to keep a copy somewhere safe.', False),
-    ('Does it support GST and UPI?', 'Yes — GSTIN, HSN/SAC, CGST + SGST or IGST, and your UPI QR code on invoices.', False),
-    ('Which computers does it run on?', 'Windows 10 and 11 (64-bit), macOS 12 or later, and Linux (.deb or AppImage).', False),
-    ('Can I move to a new computer?', 'Yes. Make a backup, install Invoiceo on the new computer and restore the backup there.', False),
-    ('Can I use it outside India?', 'Yes. Choose your currency and language; GST fields can be turned off when you don’t need them.', False),
-    ('Is it right for a small shop?', 'Yes — barcode scanning, thermal receipts, stock tracking and daily sales reports are built in.', False),
-    ('How can it be free?', 'There’s no paid version. Optional <a href="customization.html">paid customization</a> and donations support development.', False),
-    ('Why does Windows warn me when installing?', 'The installer isn’t code-signed yet. Click <b>More info</b>, then <b>Run anyway</b>.', False),
-]
-home_faq = section(
-    section_head('FAQ', 'Questions people ask before downloading', hid='faq-title')
-    + '<div class="faq-grid mt-4">' + ''.join('<div class="faq-col">' + ''.join(faq_item(q, a, o) for q, a, o in col) + '</div>'
-                                             for col in (HOME_FAQ[0::2], HOME_FAQ[1::2])) + '</div>'
-    + '<p class="center mt-3">Still unsure? <span data-block><a data-whatsapp target="_blank" rel="noopener">Ask us on WhatsApp</a>, </span>'
-      '<a href="faq.html">read all the answers</a> or <a href="contact.html">contact us</a>.</p>',
-    'faq', '', 'faq-title')
 
 # ───────────────────── Comparison (home teaser, "not built in") ─────────────────────
 COMPARE_CHECKED = '31 October 2026'
@@ -954,9 +743,18 @@ compare_home = section(
     section_head('How it compares', 'Free means free here',
                  'Some free billing software limits the free plan or ends after a short trial. Invoiceo does not.', 'cmp-title')
     + '<div class="grid-auto mt-4">'
-    + f'<div class="card">{tile("gift")}<h3>No invoice limit, no trial</h3><p>Some free plans allow only a few documents a month (for example 10), or are a 7-day trial. {NAME} has no limit and no end date, on as many computers as you like.</p></div>'
-    + f'<div class="card">{tile("lock")}<h3>Offline and private</h3><p>Your data stays on your computer. There is no sign-up and no cloud account, and it is open source, so anyone can check what it does.</p></div>'
-    + f'<div class="card">{tile("globe")}<h3>Works in India and abroad</h3><p>GST invoices for India, or turn GST off and bill in any currency. Eight app languages, and A4 or 58/80 mm thermal printing, on Windows, macOS and Linux.</p></div>'
+    + '<div class="card cmp-card">'
+    + '<div class="art art-limit" aria-hidden="true">'
+      '<div class="row"><span>10 a month</span><div class="trk"><i style="width:22%"></i></div></div>'
+      '<div class="row"><span>7-day trial</span><div class="trk"><i style="width:9%"></i></div></div>'
+      '<div class="row us"><span>Invoiceo</span><div class="trk"><i style="width:100%"></i></div><b>∞</b></div></div>'
+    + f'{tile("gift")}<h3>No invoice limit, no trial</h3><p>Some free plans allow only a few documents a month (for example 10), or are a 7-day trial. {NAME} has no limit and no end date, on as many computers as you like.</p></div>'
+    + '<div class="card cmp-card">'
+    + '<div class="art art-private" aria-hidden="true"><em class="no">Cloud</em><span class="dash"></span><em class="yes">Your PC</em></div>'
+    + f'{tile("lock")}<h3>Offline and private</h3><p>Your data stays on your computer. There is no sign-up and no cloud account, and it is open source, so anyone can check what it does.</p></div>'
+    + '<div class="card cmp-card">'
+    + '<div class="art art-world" aria-hidden="true"><em>₹</em><em>$</em><em>€</em><em>£</em><em class="tg">GST on / off<b></b></em></div>'
+    + f'{tile("globe")}<h3>Works wherever you bill</h3><p>GST invoices, or turn GST off and bill in one of 156 currencies. Eight app languages, and A4 or 58/80 mm thermal printing, on Windows, macOS and Linux.</p></div>'
     + '</div>'
     + f'<p class="center mt-3">{btn("See the side-by-side comparison", "compare.html", "secondary", "", "arrow")}</p>',
     'compare', '', 'cmp-title')
@@ -968,530 +766,148 @@ NOT_YET = ['GSTR-1 and GSTR-3B files, e-invoice and e-way bill',
            'Live sharing of data between computers, or a cloud version',
            'Ledgers, balance sheet and full accounting']
 
-final_cta = f'''<section class="cta-section" aria-labelledby="cta-title">
-  <div class="wrap">
-    <div class="cta-band">
-      <h2 id="cta-title">Simple billing. No monthly bill.</h2>
-      <p class="lead">Download {NAME} and create your first invoice today.</p>
-      <div class="cta-row">
-        {btn(f'Download {NAME} — free forever', '#download', 'inverse', 'lg', 'download')}
-        {btn('Contact us', 'contact.html', 'on-dark', 'lg', 'message')}
-      </div>
-    </div>
-  </div>
-</section>'''
 
-page('index.html', f'{NAME} — Free offline billing and GST invoice software',
-     f'{NAME} is free, open-source billing software for Windows, macOS and Linux. Make GST invoices, quotations and '
-     'receipts offline, in Tamil, Hindi and more.',
-     'home', '\n\n'.join([hero, facts, why, compare_home, how, features, shots, who, customers, local_global, privacy, open_source, download, home_faq, final_cta]),
-     jsonld=[software_ld('Free, open-source offline billing and GST invoice software for small businesses.', GROUPS),
-             WEBSITE_LD])
-
-# ─────────────────────────────── Tamil home ────────────────────────────────
-# ta.html: the home page in Tamil, for shops that search in Tamil. Same facts
-# as the English page, no more. Screen names follow the app's Tamil labels
-# (lib/l10n/app_ta.arb); the screenshots show the app in Tamil when the
-# *-ta.png files exist (screenshot tool with --dart-define=SHOT_LOCALE=ta).
-def ta_shot(name):
-    return name + '-ta' if os.path.exists(os.path.join(SCREENS, name + '-ta.png')) else name
+# ──────────────── Home pages: ONE template, one text file per language (tool/site_text/*.py) ────────────────
+SCREEN_NAMES = ['dashboard', 'create-invoice', 'invoices', 'customers', 'products', 'reports']
+DOC_NAMES = [('invoice-a4', 'paper-a4'), ('receipt-80mm', 'paper-receipt')]   # (file name, picture style)
+DOCS = os.path.join(OUT, 'assets', 'images', 'docs')
+screen_cards = [n for n in SCREEN_NAMES if os.path.exists(os.path.join(SCREENS, n + '.png'))]
+doc_cards = [(n, cls) for n, cls in DOC_NAMES if os.path.exists(os.path.join(DOCS, n + '.png'))]
+# Extra home sections that exist in one language only (the English "Free means free here" comparison teaser).
+HOME_EXTRA = {'en': {'compare': compare_home}}
+HOME_ORDER = ['hero', 'facts', 'why', 'compare', 'how', 'features', 'shots', 'who', 'lang', 'download', 'cta']
 
 
-ta_hero = f'''<section class="hero" aria-labelledby="hero-title">
+def shot_file(name, lang):
+    """The app screenshot for a language: <name>-<lang>.png when it exists (the app shown in that language), else <name>.png."""
+    if lang != 'en' and os.path.exists(os.path.join(SCREENS, f'{name}-{lang}.png')):
+        return f'{name}-{lang}'
+    return name
+
+
+def home_sections(lang):
+    T = TEXT[lang]
+    shot = lambda n: shot_file(n, lang)
+    sec = {}
+    # hero
+    h = T['hero']
+    sec['hero'] = f"""<section class="hero" aria-labelledby="hero-title">
   <div class="wrap hero-grid">
     <div class="hero-copy">
-      <div class="badges">{badge('இலவசம் · ஓப்பன் சோர்ஸ்', 'brand', 'code')}{badge('Windows · macOS · Linux', 'neutral', 'monitor')}</div>
-      <h1 class="display" id="hero-title"><em>இலவச</em> பில்லிங் சாஃப்ட்வேர் — தமிழிலேயே</h1>
-      <p class="lead">உங்கள் கணினியிலேயே GST பில், கொட்டேஷன், ரசீது போடலாம். {NAME} ஒரு இலவச, ஓப்பன் சோர்ஸ் டெஸ்க்டாப் ஆப் — மாதக் கட்டணம் இல்லை, ஆன்லைன் கணக்கு தேவையில்லை, இன்டர்நெட் இல்லாமலும் வேலை செய்யும். உங்கள் கடைத் தகவல்கள் உங்கள் கணினியை விட்டு வெளியே போகாது.</p>
+      <div class="badges">{badge(h['badge'], 'brand', 'code')}{badge('Windows · macOS · Linux', 'neutral', 'monitor')}</div>
+      <h1 class="display" id="hero-title">{h['h1']}</h1>
+      <p class="lead">{h['lead']}</p>
       <div class="cta-row">
-        <a class="btn btn-primary btn-lg" href="#download" data-os-download><span data-os-icon>{icon('download')}</span><span data-os-label>இலவச டவுன்லோட்</span></a>
-        {btn('வசதிகளைப் பாருங்கள்', '#features', 'secondary', 'lg')}
+        <a class="btn btn-primary btn-lg" href="#download" data-os-download><span data-os-icon>{icon('download')}</span><span data-os-label>{h['dl_label']}</span></a>
+        {btn(h['features_btn'], '#features', 'secondary', 'lg')}
       </div>
-      {hero_send('ta')}
-      <p class="hero-meta" data-hero-meta>இலவசம் · பதிப்பு <span data-version>{VERSION}</span> · Windows, macOS, Linux கணினிகளுக்கு</p>
-      {checks(['என்றும் இலவசம்', 'ஓப்பன் சோர்ஸ்', 'இன்டர்நெட் தேவையில்லை', 'பதிவு தேவையில்லை'], 'checks-inline')}
+      {hero_send(lang)}
+      <p class="hero-meta" data-hero-meta>{h['meta'].replace('{version}', VERSION)}</p>
+      {checks(h['checks'], 'checks-inline')}
     </div>
     <div class="hero-visual">
-      {window(ta_shot('create-invoice'), f'தமிழில் {NAME}-ன் புதிய விலைப்பட்டியல் திரை: வாடிக்கையாளர் Kannan, நான்கு மளிகைப் பொருட்கள், GST, மொத்தம் Rs. 5,829.50', cls='hero-shot', lazy=False, sizes='(max-width: 1100px) 100vw, 700px')}
-      {receipt('hero-receipt', 'ta')}
-      <span class="hero-chip">{badge('தகவல்கள் உங்கள் கணினியிலேயே', 'teal', 'lock')}</span>
+      {hero_tour(lang, h['alt'], h['tour'])}
+      <div class="print-out">{receipt('', lang)}<span class="printer" aria-hidden="true"><i></i></span></div>
+      <span class="hero-chip">{badge(h['chip'], 'teal', 'lock')}</span>
     </div>
   </div>
-</section>'''
-
-TA_FACTS = [('percent', 'GST &amp; UPI QR', 'CGST, SGST, IGST, HSN/SAC'), ('printer', 'A4 &amp; தெர்மல்', 'A4, A5, A6, 58/80 mm'),
-            ('globe', 'தமிழ் உட்பட 8 மொழிகள்', 'திரையிலும் பில்லிலும் தமிழ்'), ('database', 'பேக்கப் &amp; ரீஸ்டோர்', 'புதிய கணினிக்கு மாற்றலாம்'),
-            ('code', 'MIT License', 'ஓப்பன் சோர்ஸ் உரிமம்')]
-ta_facts = ('<div class="facts-strip"><ul class="wrap facts">'
-            + ''.join(f'<li class="fact">{tile(i, "teal", "md")}<div><b>{v}</b><span>{l}</span></div></li>' for i, v, l in TA_FACTS)
-            + '</ul></div>')
-
-TA_WHY = [('gift', 'என்றும் இலவசம்', 'சந்தா இல்லை, ட்ரையல் இல்லை, கட்டணப் பதிப்பும் இல்லை. எல்லா வசதிகளும் எப்போதும் இலவசம்.'),
-          ('wifi-off', 'இன்டர்நெட் இல்லாமலும்', 'நெட் இல்லாமலே பில் போடலாம், பிரிண்ட் எடுக்கலாம், ரிப்போர்ட் பார்க்கலாம். நெட் போனாலும் பில்லிங் நிற்காது.'),
-          ('lock', 'உங்கள் தகவல் உங்களிடமே', 'வாடிக்கையாளர்கள், பொருட்கள், பில்கள் எல்லாம் உங்கள் கணினியிலேயே சேமிக்கப்படும்; வேறு யாருடைய சர்வருக்கும் போகாது.'),
-          ('code', 'ஓப்பன் சோர்ஸ்', 'சோர்ஸ் கோடு MIT License-ல் பொதுவில் உள்ளது. ஆப் என்ன செய்கிறது என்பதை யார் வேண்டுமானாலும் சரிபார்க்கலாம்.'),
-          ('monitor', 'Windows, macOS, Linux', 'உங்களிடம் ஏற்கெனவே உள்ள கணினியிலேயே ஓடும்; எல்லாவற்றிலும் அதே வசதிகள்.'),
-          ('repeat', 'எதிலும் கட்டிப்போடாது', 'எப்போது வேண்டுமானாலும் பேக்கப் எடுக்கலாம், வேறு கணினியில் ரீஸ்டோர் செய்யலாம், பட்டியல்களை CSV அல்லது PDF-ஆக எடுக்கலாம்.')]
-ta_why = section(section_head(f'ஏன் {NAME}?', 'மாதக் கட்டணம் இல்லாத பில்லிங் சாஃப்ட்வேர்',
-                              'ஒரு சிறு கடைக்குப் பில் போடத் தேவையான எல்லாமே இதில் உண்டு — அதுவும் உங்கள் சொந்தக் கணினியிலேயே.', 'why-title')
-                 + '<div class="grid-auto mt-4">' + ''.join(f'<div class="card">{tile(i)}<h3>{t}</h3><p>{d}</p></div>' for i, t, d in TA_WHY) + '</div>',
-                 'why', 'section-flush', 'why-title')
-
-TA_HOW = [('01', 'கடை விவரங்கள்', 'கடைப் பெயர், லோகோ, GSTIN, வங்கி விவரம், UPI ID — ஒரு முறை சேர்த்தால் போதும்.'),
-          ('02', 'வாடிக்கையாளர்கள், பொருட்கள்', 'CSV ஃபைலில் இருந்து பட்டியலை ஏற்றலாம், அல்லது பில் போடும்போதே சேர்க்கலாம். பார்கோடு ஸ்கேனரும் வேலை செய்யும்.'),
-          ('03', 'பில் போடுங்கள்', 'வாடிக்கையாளரைத் தேர்ந்தெடுத்து, பொருட்களைத் தேடுங்கள் அல்லது ஸ்கேன் செய்யுங்கள். வரியும் மொத்தமும் தானாகக் கணக்கிடப்படும்.'),
-          ('04', 'பிரிண்ட் அல்லது PDF', 'A4 அல்லது தெர்மல் பிரிண்டரில் பிரிண்ட் எடுக்கலாம்; அல்லது PDF-ஆகச் சேமித்து வாடிக்கையாளருக்கு அனுப்பலாம்.'),
-          ('05', 'பணம் வசூல்', 'முழுத் தொகை அல்லது பகுதித் தொகையைப் பதிவு செய்யலாம், ரசீது பிரிண்ட் எடுக்கலாம், யார் இன்னும் தர வேண்டும் என்று பார்க்கலாம்.')]
-ta_how = section('<div class="flow"><div class="flow-copy">'
-                 + section_head('செயல்முறை', 'ஐந்தே படிகளில் — செட்டப் முதல் பணம் வசூல் வரை',
-                                'கடையில் வழக்கமாகப் பில் போடும் அதே முறைதான் — இன்னும் வேகமாக, ஒழுங்காக.', 'how-title', left=True)
-                 + '<ol class="steps">' + ''.join(f'<li class="step"><span class="step-num">{n}</span><div><h3>{t}</h3><p>{b}</p></div></li>' for n, t, b in TA_HOW) + '</ol></div>'
-                 + '<div>' + window(ta_shot('invoices'), f'தமிழில் {NAME}-ன் விலைப்பட்டியல்கள் பட்டியல்: செலுத்தியவை, செலுத்தாதவை, பகுதியாகச் செலுத்தியவை, நிலுவைத் தொகையுடன்',
-                                    sizes='(max-width: 1100px) 100vw, 700px') + '</div></div>',
-                 'how-it-works', 'section-subtle', 'how-title')
-
-TA_GROUPS = [
-    ('file', 'பில்லிங்', ['ஆறு பில் டிசைன்கள், கூடவே தெர்மல் ரசீது வடிவம்', 'A4, A5, A6, 58/80 mm-ல் பிரிண்ட் அல்லது PDF',
-                          'உங்கள் prefix-உடன் தானியங்கி பில் எண்', 'தள்ளுபடி, வரி, கூடுதல் கட்டணங்கள்',
-                          'பில்லில் உங்களுக்கு வேண்டிய கூடுதல் விவரங்கள்', 'முடிக்காத பில்லை வரைவாக (draft) சேமிக்கலாம்'], 'span-2'),
-    ('briefcase', 'கடை நிர்வாகம்', ['கொட்டேஷனை ஒரே கிளிக்கில் பில்லாக மாற்றலாம்', 'முழு அல்லது பகுதிப் பணம் வசூல், ரசீதுடன்',
-                                     'நிலுவைத் தொகை உள்ள வாடிக்கையாளர்கள்', 'பொருட்கள், சேவைகள், இருப்பு (stock), batch, expiry',
-                                     'விற்பனை, வரி, நிலுவை, தினசரி, இருப்பு ரிப்போர்ட்கள்', 'பட்டியல்களை CSV-ஆக ஏற்றலாம், எடுக்கலாம்'], 'span-2'),
-    ('percent', 'இந்தியா &amp; GST', ['ஒவ்வொரு பில்லிலும் உங்கள் GSTIN, வாடிக்கையாளரின் GSTIN', 'ஒவ்வொரு பொருளுக்கும் HSN/SAC குறியீடு',
-                                      'CGST + SGST அல்லது IGST தானாகக் கணக்கீடு', 'Tax Invoice அல்லது Bill of Supply தலைப்பு',
-                                      'உங்கள் UPI QR குறியீடு பில்லிலேயே'], 'span-2'),
-    ('hard-drive', 'உங்கள் கணினியிலேயே, பாதுகாப்பாக', ['இன்டர்நெட் இல்லாமலும் வேலை செய்யும்', 'தகவல்கள் உங்கள் கணினியிலேயே',
-                                                        'ஒரே கிளிக்கில் பேக்கப், ரீஸ்டோர்', 'ஒரே கணினியில் பல நிறுவனங்கள்',
-                                                        'ஊழியர்களுக்குத் தனி லாகின் (admin அல்லது user)', 'ஆன்லைன் கணக்கு தேவையில்லை'], 'span-3'),
-    ('globe', 'தமிழும் மற்ற மொழிகளும்', ['தமிழ், English, இந்தி உட்பட 8 மொழிகள்', 'தமிழ் எழுத்துகள் PDF-லும் ரசீதிலும் சரியாக அச்சாகும்',
-                                         'உங்கள் நாணயத்தை (currency) தேர்ந்தெடுக்கலாம்', 'USB பார்கோடு ஸ்கேனர்',
-                                         'ஒவ்வொரு விற்பனைக்குப் பிறகும் தெர்மல் ரசீது தானாகப் பிரிண்ட் ஆகும்'], 'span-3'),
-]
-ta_features = section(section_head('வசதிகள்', 'ஒரு சிறு கடைக்குத் தேவையான எல்லா பில்லிங் வசதிகளும்',
-                                   'நீங்கள் வேலை செய்யும் முறைப்படி அடுக்கப்பட்டுள்ளன — எல்லாமே இலவசம்.', 'feat-title')
-                      + '<div class="bento mt-4">' + ''.join(f'<div class="group-card {c}"><div class="group-card-head">{tile(i)}<h3>{t}</h3></div>{checks(items)}</div>'
-                                                             for i, t, items, c in TA_GROUPS) + '</div>',
-                      'features', '', 'feat-title')
-
-TA_SHOTS = {'dashboard': ('முகப்புப் பலகை', 'வசூலான பணம், நிலுவை, மாத விற்பனை, பில் நிலை, சமீபத்திய பில்கள்.'),
-            'create-invoice': ('புதிய விலைப்பட்டியல்', 'வாடிக்கையாளர், பொருட்கள், GST, மொத்தம் — எல்லாம் ஒரே திரையில்.'),
-            'invoices': ('விலைப்பட்டியல்கள்', 'எது செலுத்தப்பட்டது, எது நிலுவை என்று பார்க்கலாம்; எந்தப் பில்லையும் விரைவாகத் தேடலாம்.'),
-            'customers': ('வாடிக்கையாளர்கள்', 'போன் எண், GSTIN, ஒவ்வொருவரும் தர வேண்டிய தொகை.'),
-            'products': ('பொருட்கள்', 'விலை, HSN, வரி, இருப்பு — குறைந்த இருப்பு உடனே தெரியும்.'),
-            'reports': ('அறிக்கைகள்', 'மாதவாரியாக பில் தொகை, வசூல், நிலுவை.')}
-TA_DOCS = {'invoice-a4': ('அச்சிட்ட பில் (A4)', 'Classic டிசைனில் ஒரு GST பில் — வாடிக்கையாளர் கையில் கிடைப்பது போலவே.',
-                          f'{NAME} அச்சிட்ட மாதிரி A4 GST பில்: Sri Murugan Traders, Kannan Stores-க்கு ஆறு பொருட்கள், CGST, SGST உடன், மொத்தம் Rs. 7019.10'),
-           'receipt-80mm': ('தெர்மல் ரசீது (80 mm)', 'தமிழ்ப் பொருள் பெயர்களுடன், சரியாக அச்சான கவுண்டர் ரசீது.',
-                            'மூன்று தமிழ்ப் பொருள் பெயர்களுடன் மாதிரி 80 mm தெர்மல் ரசீது, முழுதும் செலுத்தப்பட்டது, மொத்தம் Rs. 1036.60')}
-ta_shots = section(section_head('ஸ்கிரீன்ஷாட்கள்', 'இன்ஸ்டால் செய்யும் முன்பே எல்லாத் திரைகளையும் பாருங்கள்',
-                                f'தமிழில் இயங்கும் {NAME}-ன் உண்மையான திரைகளும் அது அச்சிட்ட பில்களும், ஒரு மாதிரிக் கடையின் தகவல்களுடன்.', 'shots-title')
-                   + '<div class="shots mt-4">'
-                   + ''.join(f'<figure class="shot{" shot-wide" if i == 0 and doc_cards else ""}">{window(ta_shot(n), f"தமிழில் {NAME}-ன் {TA_SHOTS[n][0]} திரை")}'
-                             f'<figcaption><b>{TA_SHOTS[n][0]}</b><span>{TA_SHOTS[n][1]}</span></figcaption></figure>' for i, (n, _, _) in enumerate(screen_cards))
-                   + ''.join(f'<figure class="shot">{paper(n, cls, TA_DOCS[n][2])}<figcaption><b>{TA_DOCS[n][0]}</b><span>{TA_DOCS[n][1]}</span></figcaption></figure>'
-                             for n, cls, _, _, _ in doc_cards)
-                   + '</div>',
-                   'screenshots', 'section-subtle', 'shots-title')
-
-TA_WHO = [('shopping-bag', 'மளிகை, சில்லறைக் கடைகள்', 'பார்கோடு ஸ்கேனிங், தெர்மல் ரசீதுடன் வேகமான கவுண்டர் பில்லிங்.'),
-          ('package', 'மருந்தகங்கள், மெடிக்கல் ஷாப்கள்', 'பொருட்களுக்கு batch எண், expiry தேதி; இருப்பு குறைந்தால் எச்சரிக்கை.'),
-          ('truck', 'வியாபாரிகள், மொத்த விற்பனையாளர்கள்', 'HSN குறியீடுகளுடன் GST பில், இருப்பு நிலை, வாடிக்கையாளர் நிலுவை.'),
-          ('user', 'ஃப்ரீலான்சர்கள், ஆலோசகர்கள்', 'தெளிவான PDF கொட்டேஷன், பில்; யார் பணம் தந்தார்கள் என்று தெளிவாகத் தெரியும்.'),
-          ('tool', 'சர்வீஸ், ரிப்பேர் கடைகள்', 'பாகங்கள், கூலிக்கு விரைவான பில்; பகுதிப் பணம், ரசீது.'),
-          ('briefcase', 'எந்தச் சிறு வணிகமும்', 'ஒரே கணினியில் பல நிறுவனங்கள், ஊழியர் லாகின்கள் — எல்லாம் இலவசம்.')]
-ta_who = section(section_head('யாருக்கு?', 'சிறு வணிகங்கள் வேலை செய்யும் முறைக்கே ஏற்றது', hid='who-title')
-                 + '<div class="grid-auto-wide mt-4">' + ''.join(f'<div class="usecase">{tile(i, "neutral")}<div><h3>{t}</h3><p>{d}</p></div></div>' for i, t, d in TA_WHO) + '</div>',
-                 'who', '', 'who-title')
-
-TA_INDIA = ['GSTIN, HSN/SAC, CGST + SGST அல்லது IGST', 'பில்லில் UPI QR குறியீடு', 'இயல்பாக ரூபாயில் தொகை', 'திரையிலும் பில்லிலும் தமிழ், இந்தி']
-TA_TAMIL = ['மெனு, பட்டன்கள், பெரும்பாலான திரைகள் தமிழில்', 'பொருள், வாடிக்கையாளர் பெயர்களைத் தமிழில் சேமிக்கலாம்',
-            'தமிழ்ப் பெயர்கள் PDF-லும் தெர்மல் ரசீதிலும் சரியாக அச்சாகும்', 'எப்போது வேண்டுமானாலும் English-க்கு மாற்றலாம்']
-TA_ENERGY_WORK = [
-    'உற்பத்தியான யூனிட்கள், ஒதுக்கப்பட்ட யூனிட்கள், அந்த மாத விலையில் பில் செய்யப்படும் நிகர யூனிட்கள்',
-    'அந்த மாதக் கழிவுகள் “Less:” கீழ் — டிரான்ஸ்மிஷன், வீலிங், ஷெட்யூலிங், மீட்டர் ரீடிங் போன்றவை — நிலையான '
-    'தொகையாகவோ யூனிட்டுக்கு இவ்வளவு என்றோ (10 பைசா சுய உற்பத்தி வரி போல)',
-    'மொத்தச் செலவுகள், ரவுண்ட் ஆஃப், நிகரத் தொகை — தொகை எழுத்திலும்',
-    'கடந்த மாத விவரம், விலை, கழிவுகளை நினைவில் வைக்கும்; புதிய பில்லுக்குப் புதிய எண்கள் மட்டும் போதும்',
-    'நிறுவனத்தின் சொந்த பாணியில் பில் எண்கள், ஒவ்வொரு நிதியாண்டும் 001-லிருந்து (எ.கா. ABC/26-27/001)',
-    'சாதாரண பில்லைப் போலவே சேமிக்கப்படும் — பணம் வசூல், நிலுவை, அறிக்கைகள் வழக்கம்போல்',
-]
-# The energy bill first, the customer's words under it (as on the Reviews page).
-ta_customers = section(
-    '<div class="review-story stack">'
-    + section_head('வாடிக்கையாளர்கள்', 'Green &amp; Green Agri Solutions-க்காக உருவாக்கிய மின் (energy) பில்',
-                   'காற்றாலை, சூரிய மின் விற்பனைக்கான மாதாந்திர பில்: யூனிட்கள், விலை, கழிவுகள், நிகரத் தொகை — ஒவ்வொரு '
-                   'மாதமும் சில கிளிக்குகளில்.', 'tm-title')
-    + f'<p class="center">{badge("தனிப்பயன் வசதி", "brand", "tool")}</p>'
-    + f'<figure class="doc-full"><a href="{_energy_png}" target="_blank" rel="noopener" title="முழு அளவில் திறக்க">'
-      f'<img src="{_energy_png}" width="{_ew}" height="{_eh}" alt="{NAME}-ல் செய்த மாதிரி மின் பில்: உற்பத்தி, ஒதுக்கிய யூனிட்கள், '
-      f'நிகர யூனிட்கள், கழிவுகள், நிகரத் தொகை" loading="lazy" decoding="async"></a>'
-      '<figcaption>மாதிரித் தகவல்களுடன் காட்டப்பட்டுள்ளது: இதிலுள்ள பெயர்கள், எண்கள் அனைத்தும் கற்பனையானவை.</figcaption></figure>'
-    + ''.join(testimonial_card(t, 'ta', link=False) for t in TESTIMONIALS)
-    + f'<div class="card stack"><h3 class="h4">இந்த பில் என்ன செய்யும்?</h3>{checks(TA_ENERGY_WORK)}</div>'
-    + '<div class="stack" style="align-items: center; text-align: center; gap: 14px">'
-      '<p>உங்கள் தொழிலுக்கும் இப்படி ஒரு தனி பில் வேண்டுமா? இது கட்டண சேவை; ஒவ்வொரு கோரிக்கைக்கும் தனியாக விலை சொல்வோம்.</p>'
-      '<div class="cta-row" style="justify-content: center">'
-      f'<span data-block>{btn("WhatsApp-ல் கேளுங்கள்", "#", "primary", "", "message", attrs=" data-whatsapp target=" + chr(34) + "_blank" + chr(34) + " rel=" + chr(34) + "noopener" + chr(34))}</span>'
-      f'{btn("Customization பக்கம் (English)", "customization.html#request", "secondary", "", "arrow")}'
-      '</div></div>'
-    + '</div>',
-    'customers', 'section-subtle', 'tm-title')
-
-ta_tamil = section(section_head('தமிழில்', 'தமிழிலேயே பயன்படுத்துங்கள், தமிழிலேயே பிரிண்ட் எடுங்கள்',
-                                f'{NAME} இந்தியாவில், இந்திய பில்லிங் விதிகளுக்காக உருவாக்கப்பட்டது. ஆப்பின் மொழியைத் தமிழாக மாற்றினால் போதும்.', 'lg-title')
-                   + '<div class="split split-stretch mt-4">'
-                   + f'<div class="group-card is-subtle"><div class="group-card-head">{tile("globe")}<h3>தமிழில் பில்லிங்</h3></div>{checks(TA_TAMIL)}'
-                   + f'<div class="stack" style="gap:10px"><p class="chips-label">ஆப் மொழிகள்</p><div class="chips">{langs}</div></div></div>'
-                   + f'<div class="group-card is-subtle"><div class="group-card-head">{tile("percent")}<h3>இந்தியாவுக்காக</h3></div>{checks(TA_INDIA)}</div>'
-                   + '</div>', 'tamil', '', 'lg-title')
-
-ta_privacy = f'''<section class="section section-night on-dark" id="privacy" aria-labelledby="priv-title">
-  <div class="wrap split">
-    <div>
-      {section_head('தனியுரிமை', 'உங்கள் வணிகத் தகவல் உங்களுக்கே சொந்தம்.', f'{NAME} உங்கள் வணிகத் தகவல்களை உங்கள் கணினியிலேயே வைத்திருக்கும். வாடிக்கையாளர்கள், விலைகள், விற்பனை பற்றிய எதுவும் எங்களுக்கோ வேறு யாருக்குமோ அனுப்பப்படுவதில்லை.', 'priv-title', left=True)}
-      {checks(['இன்டர்நெட் இல்லாமலும் வேலை செய்யும்', 'உங்கள் கணினியிலேயே சேமிப்பு', 'கணக்கும் இல்லை, சந்தாவும் இல்லை', 'நீங்கள் விரும்பும்போது பேக்கப்'], 'checks-grid mt-3')}
-      <p class="mt-3 small"><a href="privacy.html" style="color: var(--night-accent)">தனியுரிமைக் கொள்கையைப் படிக்க (English)</a></p>
-    </div>
-    <div class="vault">
-      <div class="vault-head">{tile('monitor', 'night')}<div><b>உங்கள் கணினி</b><span>{NAME} சேமிக்கும் எல்லாம் இங்கேதான்</span></div></div>
-      <ul class="vault-items">{''.join(f'<li>{icon(i)}{t}</li>' for i, t in [('file', 'பில்கள்'), ('users', 'வாடிக்கையாளர்கள்'), ('package', 'பொருட்கள்'), ('database', 'பேக்கப்கள்')])}</ul>
-      <hr>
-      <p class="vault-foot">{icon('cloud-off')}<span><b>உங்கள் வணிகத் தகவல் ஒருபோதும் அப்லோட் ஆகாது.</b> {NAME}-க்கு கிளவுடும் இல்லை, லாகின் செய்ய ஆன்லைன் கணக்கும் இல்லை.</span></p>
-    </div>
-  </div>
-</section>'''
-
-ta_free = section(
-    '<div class="split"><div>'
-    + section_head('ஓப்பன் சோர்ஸ்', 'எல்லோரும் பார்க்கும்படி உருவாக்கப்பட்டது',
-                   f'{NAME}-ன் சோர்ஸ் கோடு MIT License-ல் பொதுவில் உள்ளது. நாங்கள் சொல்வதை நம்ப வேண்டியதில்லை — நீங்களே சரிபார்க்கலாம்.', 'os-title', left=True)
-    + checks(['உங்கள் தகவலை ஆப் எப்படிக் கையாள்கிறது என்று நேரடியாகப் படிக்கலாம்', 'MIT License-ல் இலவசமாகப் பயன்படுத்தலாம், மாற்றலாம்',
-              'எத்தனை கணினிகளில் வேண்டுமானாலும் இலவசமாகப் பயன்படுத்தலாம்'], 'mt-3')
-    + '</div><div class="stack">'
-    + f'<div class="card card-note"><h3 class="h4">இது எப்படி இலவசம்?</h3><p>{NAME}-ஐ {BUSINESS} உருவாக்குகிறது; இது ANOOP P உருவாக்கிய, MIT உரிமம் பெற்ற '
-      'Invoiso-வை அடிப்படையாகக் கொண்டது. கட்டணப் பதிப்பு எதுவும் இல்லை. தனி வசதி தேவைப்படும் வணிகங்களுக்கான '
-      f'<a href="customization.html">கட்டண customization</a> சேவையும், <a href="{COFFEE}" target="_blank" rel="noopener">நன்கொடைகளும்</a> இதன் வளர்ச்சிக்கு உதவுகின்றன.</p></div>'
-    + f'<div class="repo-card"><div class="group-card-head">{tile("code")}<h3 class="h4">MIT License</h3></div>'
-    + '<p>உரிம விவரங்கள் <a href="licenses.html">Licenses பக்கத்தில்</a> (English) உள்ளன.</p>'
-    + f'<div class="badges">{badge("ஓப்பன் சோர்ஸ்", "neutral", "code")}{badge("சமீபத்திய பதிப்பு <span data-version>" + VERSION + "</span>", "neutral", "download")}</div></div>'
-    + '</div></div>', 'open-source', '', 'os-title')
-
-TA_TRUST = ('<div class="dl-trust">' + ''.join(badge(t, 'teal', 'check') for t in
-                                              ['என்றும் இலவசம்', 'கிரெடிட் கார்டு தேவையில்லை', 'சந்தா இல்லை', 'ஓப்பன் சோர்ஸ்']) + '</div>')
-TA_PHONE_NOTE = phone_note('ta')
-TA_FIRST_STEPS = [
-    ('download', 'டவுன்லோட்', 'மேலே உங்கள் கணினியைத் தேர்ந்தெடுங்கள்.'),
-    ('package', 'இன்ஸ்டால்', 'ஃபைலைத் திறந்து வழிமுறைகளைப் பின்பற்றுங்கள்.'),
-    ('user', 'லாகின், செட்டப்', 'எப்படி லாகின் செய்வது என்று முதல் திரையே காட்டும். பிறகு உங்கள் கடை விவரங்களைச் சேர்க்கவும்.'),
-    ('file', 'முதல் பில்', 'வாடிக்கையாளரையும் பொருட்களையும் சேர்த்து, பில்லை உருவாக்குங்கள்.'),
-    ('printer', 'பிரிண்ட் அல்லது PDF', 'A4 அல்லது தெர்மல் பிரிண்டரில் பிரிண்ட் எடுக்கலாம், அல்லது PDF-ஆகச் சேமிக்கலாம்.'),
-]
-ta_download = section(
-    section_head('டவுன்லோட்', 'இன்றே இலவசமாகப் பில் போடத் தொடங்குங்கள்',
-                 f'{NAME} <span data-version>{VERSION}</span> · வெளியீடு {RELEASE_DATE_TA} · <a href="changelog.html">புதியவை (English)</a>', 'dl-title')
-    + f'<div class="mt-2">{TA_TRUST}</div><div class="mt-2">{TA_PHONE_NOTE}</div>'
-    + f'<div class="mt-3">{dl_grid(full=True, lang="ta")}</div>'
-    + f'<div class="mt-2"><p class="center small muted">டவுன்லோடைச் சரிபார்க்க: <a href="{DL}SHA256SUMS.txt">SHA-256 checksums</a></p></div>'
-    + '<h3 class="h3 center" style="margin: 72px 0 20px">சில நிமிடங்களில் தொடங்கலாம்</h3>'
-    + first_steps('h4', TA_FIRST_STEPS, 'படி'),
-    'download', 'section-subtle', 'dl-title')
-
-TA_FAQ = [
-    (f'{NAME} உண்மையிலேயே இலவசமா?', 'ஆம். எல்லா வசதிகளும் இலவசம் — ட்ரையல், சந்தா, கட்டணப் பதிப்பு எதுவும் இல்லை. எத்தனை கணினிகளில் வேண்டுமானாலும் இன்ஸ்டால் செய்யலாம்.', True),
-    ('தமிழில் பயன்படுத்தலாமா?', 'ஆம். ஆப்பைத் தமிழில் பயன்படுத்தலாம்; தமிழ்ப் பெயர்கள் PDF-லும் தெர்மல் ரசீதிலும் சரியாக அச்சாகும். English, இந்தி உட்பட மொத்தம் 8 மொழிகள் உண்டு.', True),
-    ('இன்டர்நெட் இல்லாமல் வேலை செய்யுமா?', 'ஆம். டவுன்லோட் செய்ய மட்டும் இன்டர்நெட் தேவை. பில், பிரிண்ட், ரிப்போர்ட் எல்லாம் இன்டர்நெட் இல்லாமலே வேலை செய்யும்.', True),
-    ('ஆன்லைன் கணக்கு தொடங்க வேண்டுமா?', 'இல்லை. ஆப்பிலேயே உங்கள் கணினிக்கான லாகின் உண்டு; ஒவ்வொருவருக்கும் தனி பாஸ்வேர்டு வைக்கலாம்.', True),
-    ('என் தகவல்கள் எங்கே சேமிக்கப்படும்?', f'உங்கள் கணினியிலேயே, {NAME}-ன் data ஃபோல்டரில். பாதுகாப்புக்கு <b>அமைப்புகள் → காப்புப்பிரதி</b> மூலம் அடிக்கடி பேக்கப் எடுங்கள்.', False),
-    ('GST, UPI வசதி உண்டா?', 'ஆம் — GSTIN, HSN/SAC, CGST + SGST அல்லது IGST, பில்லில் உங்கள் UPI QR குறியீடு.', False),
-    ('எந்தக் கணினிகளில் ஓடும்?', 'Windows 10, 11 (64-bit), macOS 12 அல்லது பிந்தையது, Linux (.deb அல்லது AppImage). போன் ஆப் இல்லை.', False),
-    ('புதிய கணினிக்கு மாற முடியுமா?', f'ஆம். பழைய கணினியில் பேக்கப் எடுத்து, புதிய கணினியில் {NAME}-ஐ இன்ஸ்டால் செய்து, அந்த பேக்கப்பை ரீஸ்டோர் செய்யுங்கள்.', False),
-    ('சிறு கடைக்கு ஏற்றதா?', 'ஆம் — பார்கோடு ஸ்கேனிங், தெர்மல் ரசீது, இருப்பு கண்காணிப்பு, தினசரி விற்பனை ரிப்போர்ட் எல்லாம் உண்டு.', False),
-    ('இது எப்படி இலவசம்?', 'கட்டணப் பதிப்பு இல்லை. தேவைப்படுவோருக்கான கட்டண <a href="customization.html">customization</a> சேவையும் நன்கொடைகளும் வளர்ச்சிக்கு உதவுகின்றன.', False),
-    ('இன்ஸ்டால் செய்யும்போது Windows ஏன் எச்சரிக்கிறது?', 'இன்ஸ்டாலர் இன்னும் code-sign செய்யப்படவில்லை. <b>More info</b>, பிறகு <b>Run anyway</b> அழுத்துங்கள்.', False),
-    ('என் கடைக்கென்று தனி வசதி செய்து தர முடியுமா?', 'ஆம், கட்டண சேவையாக — ஒவ்வொரு கோரிக்கைக்கும் தனியாக விலை சொல்வோம். <a href="customization.html">Customization பக்கத்தில்</a> கேளுங்கள், அல்லது WhatsApp-ல் தொடர்பு கொள்ளுங்கள்.', False),
-]
-ta_faq = section(
-    section_head('கேள்விகள்', 'டவுன்லோட் செய்யும் முன் கேட்கப்படும் கேள்விகள்', hid='faq-title')
-    + '<div class="faq-grid mt-4">' + ''.join('<div class="faq-col">' + ''.join(faq_item(q, a, o) for q, a, o in col) + '</div>'
-                                             for col in (TA_FAQ[0::2], TA_FAQ[1::2])) + '</div>'
-    + '<p class="center mt-3">இன்னும் சந்தேகமா? <span data-block><a data-whatsapp target="_blank" rel="noopener">WhatsApp-ல் கேளுங்கள்</a>, </span>'
-      '<a href="faq.html">எல்லாப் பதில்களையும் படியுங்கள் (English)</a> அல்லது <a href="contact.html">எங்களைத் தொடர்பு கொள்ளுங்கள்</a>.</p>',
-    'faq', '', 'faq-title')
-
-ta_cta = f'''<section class="cta-section" aria-labelledby="cta-title">
+</section>"""
+    # facts strip
+    sec['facts'] = ('<div class="facts-strip"><ul class="wrap facts">'
+                    + ''.join(f'<li class="fact">{tile(i, "teal", "md")}<div><b>{v}</b><span>{l}</span></div></li>' for i, v, l in T['facts'])
+                    + '</ul></div>')
+    # why
+    w = T['why']
+    sec['why'] = section(section_head(w['eyebrow'], w['title'], w['lead'], 'why-title')
+                         + '<div class="why-grid mt-4">' + ''.join(why_card(i, t, d) for i, t, d in w['cards']) + '</div>',
+                         'why', 'section-flush', 'why-title')
+    # how it works
+    hw = T['how']
+    docs = T['shots']['docs']
+    sec['how'] = how_flow(
+        section_head(hw['eyebrow'], hw['title'], hw['lead'], 'how-title', left=True), hw['steps'],
+        [window(shot('company-info'), hw['alts'][0], sizes=_HW),
+         window(shot('products'), hw['alts'][1], sizes=_HW),
+         window(shot('create-invoice'), hw['alts'][2], sizes=_HW),
+         stage_docs(docs['invoice-a4'][2], docs['receipt-80mm'][2]),
+         window(shot('invoices'), hw['alts'][3], sizes=_HW)],
+        hw['word'],
+        extra=(f'<p class="flow-more">{btn(hw["more"][0], hw["more"][1], "secondary", "", "arrow")}</p>' if hw.get('more') else ''))
+    # features
+    f = T['features']
+    sec['features'] = section(section_head(f['eyebrow'], f['title'], f['lead'], 'feat-title')
+                              + '<div class="bento mt-4">' + ''.join(group_card(i, t, items, c) for i, t, items, c in f['groups']) + '</div>',
+                              'features', '', 'feat-title')
+    # screenshots
+    sh = T['shots']
+    sec['shots'] = section(section_head(sh['eyebrow'], sh['title'], sh['lead'], 'shots-title')
+                           + '<div class="shots mt-4">'
+                           + ''.join(f'<figure class="shot{" shot-wide" if i == 0 and doc_cards else ""}">'
+                                     f'{window(shot(n), sh["screen_alt"].format(name=NAME, t=sh["screens"][n][0]))}'
+                                     f'<figcaption><b>{sh["screens"][n][0]}</b><span>{sh["screens"][n][1]}</span></figcaption></figure>'
+                                     for i, n in enumerate(screen_cards))
+                           + ''.join(f'<figure class="shot">{paper(n, cls, docs[n][2])}<figcaption><b>{docs[n][0]}</b><span>{docs[n][1]}</span></figcaption></figure>'
+                                     for n, cls in doc_cards)
+                           + '</div>',
+                           'screenshots', 'section-subtle', 'shots-title')
+    # who it is for
+    wh = T['who']
+    sec['who'] = section(section_head(wh['eyebrow'], wh['title'], hid='who-title')
+                         + '<div class="grid-auto-wide mt-4">' + ''.join(usecase_card(n + 1, i, t, d) for n, (i, t, d) in enumerate(wh['items'])) + '</div>',
+                         'who', '', 'who-title')
+    # languages and local billing rules
+    ls = T['lang_section']
+    cards = ''
+    for c in ls['cards']:
+        chips = (f'<div class="stack" style="gap:10px"><p class="chips-label">{c["chips_label"]}</p><div class="chips">{langs}</div></div>'
+                 if c['chips_label'] else '')
+        cards += (f'<div class="group-card is-subtle lg lg-{c["icon"]}"><div class="group-card-head">{tile(c["icon"])}<h3>{c["title"]}</h3></div>'
+                  f'{checks(c["items"])}{chips}</div>')
+    sec['lang'] = section(section_head(ls['eyebrow'], ls['title'], ls['lead'], 'lg-title')
+                          + '<div class="split split-stretch mt-4">' + cards + '</div>', ls['id'], '', 'lg-title')
+    # download
+    d = T['download']
+    date = fmt_release_date(lang)
+    trust = '<div class="dl-trust">' + ''.join(badge(t, 'teal', 'check') for t in d['trust']) + '</div>'
+    sec['download'] = section(
+        section_head(d['eyebrow'], d['title'], d['lead'].format(name=NAME, version=VERSION, date=date), 'dl-title')
+        + f'<div class="mt-2">{trust}</div><div class="mt-2">{phone_note(lang)}</div>'
+        + f'<div class="mt-3">{dl_grid(full=d["full"], lang=lang)}</div>'
+        + f'<div class="mt-2">{d["checksums"].replace("{url}", DL + "SHA256SUMS.txt")}</div>'
+        + (f'<p class="center small mt-1">{d["help"]}</p>' if d['help'] else '')
+        + f'<h3 class="h3 center" style="margin: 72px 0 20px">{d["h3"]}</h3>'
+        + first_steps('h4', d['first_steps'], T['how']['word']),
+        'download', 'section-subtle', 'dl-title')
+    # closing call to action
+    c = T['cta']
+    sec['cta'] = f"""<section class="cta-section" aria-labelledby="cta-title">
   <div class="wrap">
     <div class="cta-band">
-      <h2 id="cta-title">எளிய பில்லிங். மாதக் கட்டணம் இல்லை.</h2>
-      <p class="lead">{NAME}-ஐ டவுன்லோட் செய்து, இன்றே உங்கள் முதல் பில்லைப் போடுங்கள்.</p>
+      <h2 id="cta-title">{c['title']}</h2>
+      <p class="lead">{c['lead']}</p>
       <div class="cta-row">
-        {btn(f'{NAME} டவுன்லோட் — என்றும் இலவசம்', '#download', 'inverse', 'lg', 'download')}
-        {btn('தொடர்பு கொள்ள', 'contact.html', 'on-dark', 'lg', 'message')}
+        {btn(c['download'], '#download', 'inverse', 'lg', 'download')}
+        {btn(c['contact'], 'contact.html', 'on-dark', 'lg', 'message')}
       </div>
+      <p class="cta-meta">{c['meta'].replace('{version}', VERSION)}</p>
+      {checks(c['checks'], 'checks-inline')}
     </div>
   </div>
-</section>'''
-
-page('ta.html', f'இலவச பில்லிங் சாஃப்ட்வேர் தமிழில் — GST பில், ஆஃப்லைன் | {NAME}',
-     # Under 160 characters: the offline sentence is left to the title (ஆஃப்லைன்).
-     f'{NAME} — கடைகளுக்கான இலவச பில்லிங் சாஃப்ட்வேர். தமிழிலேயே GST பில், கொட்டேஷன், ரசீது போடலாம். '
-     'Windows, Mac, Linux-க்கு இலவச டவுன்லோட்.',
-     'home', '\n\n'.join([ta_hero, ta_facts, ta_why, ta_how, ta_features, ta_shots, ta_who, ta_customers, ta_tamil, ta_privacy, ta_free,
-                          ta_download, ta_faq, ta_cta]),
-     lang='ta',
-     jsonld=[software_ld('சிறு கடைகளுக்கான இலவச, ஓப்பன் சோர்ஸ், ஆஃப்லைன் பில்லிங் மற்றும் GST பில் சாஃப்ட்வேர்.', TA_GROUPS, ta_shot),
-             WEBSITE_LD])
-
-# ─────────────────────────────── Hindi home ────────────────────────────────
-# hi.html: the home page in Hindi, built like ta.html. Same facts as the
-# English page, no more. Screen names follow the app's Hindi labels
-# (lib/l10n/app_hi.arb); the screenshots show the app in Hindi when the
-# *-hi.png files exist (screenshot tool with --dart-define=SHOT_LOCALE=hi).
-# Please have a Hindi speaker read it before it goes public.
-def hi_shot(name):
-    return name + '-hi' if os.path.exists(os.path.join(SCREENS, name + '-hi.png')) else name
+</section>"""
+    sec.update(HOME_EXTRA.get(lang, {}))
+    return sec
 
 
-hi_hero = f'''<section class="hero" aria-labelledby="hero-title">
-  <div class="wrap hero-grid">
-    <div class="hero-copy">
-      <div class="badges">{badge('मुफ़्त · ओपन सोर्स', 'brand', 'code')}{badge('Windows · macOS · Linux', 'neutral', 'monitor')}</div>
-      <h1 class="display" id="hero-title"><em>मुफ़्त</em> बिलिंग सॉफ़्टवेयर — बिना इंटरनेट के भी</h1>
-      <p class="lead">अपने कंप्यूटर पर ही GST बिल, कोटेशन और रसीद बनाइए। {NAME} एक मुफ़्त, ओपन सोर्स डेस्कटॉप ऐप है — कोई मासिक शुल्क नहीं, कोई साइन-अप नहीं, और आपके कारोबार का डेटा आपके कंप्यूटर से बाहर नहीं जाता।</p>
-      <div class="cta-row">
-        <a class="btn btn-primary btn-lg" href="#download" data-os-download><span data-os-icon>{icon('download')}</span><span data-os-label>मुफ़्त डाउनलोड</span></a>
-        {btn('सुविधाएं देखें', '#features', 'secondary', 'lg')}
-      </div>
-      {hero_send('hi')}
-      <p class="hero-meta" data-hero-meta>मुफ़्त · संस्करण <span data-version>{VERSION}</span> · Windows, macOS और Linux कंप्यूटर के लिए</p>
-      {checks(['हमेशा मुफ़्त', 'ओपन सोर्स', 'बिना इंटरनेट के चलता है', 'साइन-अप नहीं'], 'checks-inline')}
-    </div>
-    <div class="hero-visual">
-      {window(hi_shot('create-invoice'), f'हिन्दी में {NAME} की नया इनवॉइस स्क्रीन: ग्राहक Kannan, चार किराना सामान, GST और कुल Rs. 5,829.50', cls='hero-shot', lazy=False, sizes='(max-width: 1100px) 100vw, 700px')}
-      {receipt('hero-receipt', 'hi')}
-      <span class="hero-chip">{badge('डेटा आपके कंप्यूटर पर ही', 'teal', 'lock')}</span>
-    </div>
-  </div>
-</section>'''
-
-HI_FACTS = [('percent', 'GST &amp; UPI QR', 'CGST, SGST, IGST, HSN/SAC'), ('printer', 'A4 &amp; थर्मल', 'A4, A5, A6 और 58/80 mm'),
-            ('globe', 'हिन्दी सहित 8 भाषाएं', 'स्क्रीन पर भी और बिल पर भी'), ('database', 'बैकअप &amp; रीस्टोर', 'कभी भी नए कंप्यूटर पर जाएं'),
-            ('code', 'MIT License', 'ओपन सोर्स लाइसेंस')]
-hi_facts = ('<div class="facts-strip"><ul class="wrap facts">'
-            + ''.join(f'<li class="fact">{tile(i, "teal", "md")}<div><b>{v}</b><span>{l}</span></div></li>' for i, v, l in HI_FACTS)
-            + '</ul></div>')
-
-HI_WHY = [('gift', 'हमेशा मुफ़्त', 'न सब्सक्रिप्शन, न ट्रायल, न कोई पैसे वाला वर्ज़न। हर सुविधा हमेशा के लिए शामिल है।'),
-          ('wifi-off', 'बिना इंटरनेट के चलता है', 'इंटरनेट के बिना भी बिल बनाइए, प्रिंट कीजिए और रिपोर्ट देखिए। नेट चला गया? बिलिंग चलती रहेगी।'),
-          ('lock', 'आपका डेटा आपके पास', 'ग्राहक, उत्पाद और इनवॉइस आपके अपने कंप्यूटर में रहते हैं, किसी और के सर्वर पर नहीं।'),
-          ('code', 'ओपन सोर्स', 'सोर्स कोड MIT License के तहत सबके लिए खुला है। कोई भी देख सकता है कि ऐप क्या करता है।'),
-          ('monitor', 'Windows, macOS और Linux', 'जो कंप्यूटर आपके पास पहले से है, उसी के लिए एक ऐप; सब पर वही सुविधाएं।'),
-          ('repeat', 'किसी बंधन में नहीं', 'कभी भी बैकअप लीजिए, दूसरे कंप्यूटर पर रीस्टोर कीजिए, और सूचियां CSV या PDF में निकालिए।')]
-hi_why = section(section_head(f'{NAME} क्यों?', 'बिलिंग सॉफ़्टवेयर, बिना मासिक बिल के',
-                              'ग्राहकों को बिल देने के लिए एक छोटे कारोबार को जो कुछ चाहिए, सब शामिल है — और सब आपके अपने कंप्यूटर पर चलता है।', 'why-title')
-                 + '<div class="grid-auto mt-4">' + ''.join(f'<div class="card">{tile(i)}<h3>{t}</h3><p>{d}</p></div>' for i, t, d in HI_WHY) + '</div>',
-                 'why', 'section-flush', 'why-title')
-
-HI_HOW = [('01', 'अपना कारोबार सेट करें', 'कंपनी का नाम, लोगो, GSTIN, बैंक विवरण और UPI ID एक बार जोड़ दें।'),
-          ('02', 'ग्राहक और उत्पाद जोड़ें', 'CSV से सूची आयात करें, या बिल बनाते समय ही जोड़ें। बारकोड स्कैनर भी चलते हैं।'),
-          ('03', 'इनवॉइस बनाएं', 'ग्राहक चुनिए, आइटम खोजिए या स्कैन कीजिए। टैक्स और कुल अपने आप जुड़ जाते हैं।'),
-          ('04', 'प्रिंट, सेव या शेयर करें', 'A4 या थर्मल प्रिंटर पर प्रिंट कीजिए, या PDF सेव करके ग्राहक को भेज दीजिए।'),
-          ('05', 'भुगतान का हिसाब रखें', 'पूरा या आंशिक भुगतान दर्ज कीजिए, रसीद प्रिंट कीजिए और देखिए किसे अभी पैसे देने हैं।')]
-hi_how = section('<div class="flow"><div class="flow-copy">'
-                 + section_head('कैसे काम करता है', 'सेटअप से भुगतान तक, सिर्फ़ पांच कदम',
-                                'दुकान में जैसे बिल बनता है, वैसा ही — बस और तेज़ और सलीके से।', 'how-title', left=True)
-                 + '<ol class="steps">' + ''.join(f'<li class="step"><span class="step-num">{n}</span><div><h3>{t}</h3><p>{b}</p></div></li>' for n, t, b in HI_HOW) + '</ol></div>'
-                 + '<div>' + window(hi_shot('invoices'), f'हिन्दी में {NAME} की इनवॉइस सूची: चुकाए हुए, बिना चुकाए और आंशिक रूप से चुकाए इनवॉइस, बकाया रकम के साथ',
-                                    sizes='(max-width: 1100px) 100vw, 700px') + '</div></div>',
-                 'how-it-works', 'section-subtle', 'how-title')
-
-HI_GROUPS = [
-    ('file', 'इनवॉइसिंग', ['छह इनवॉइस डिज़ाइन, साथ में थर्मल रसीद का लेआउट', 'A4, A5, A6 या 58/80 mm पर प्रिंट या PDF सेव',
-                           'आपके prefix के साथ अपने आप इनवॉइस नंबर', 'छूट, टैक्स और अतिरिक्त शुल्क',
-                           'इनवॉइस पर आपके अपने कस्टम फ़ील्ड', 'अधूरे इनवॉइस को ड्राफ़्ट में सेव करें'], 'span-2'),
-    ('briefcase', 'कारोबार चलाना', ['कोटेशन एक क्लिक में इनवॉइस बन जाते हैं', 'पूरा और आंशिक भुगतान, रसीद के साथ',
-                                     'बकाया रकम वाले ग्राहक', 'उत्पाद और सेवाएं, स्टॉक, बैच और एक्सपायरी',
-                                     'बिक्री, टैक्स, बकाया, दैनिक और स्टॉक रिपोर्ट', 'सूचियां CSV में आयात और निर्यात'], 'span-2'),
-    ('percent', 'भारत &amp; GST', ['हर इनवॉइस पर आपका और ग्राहक का GSTIN', 'हर उत्पाद के लिए HSN/SAC कोड',
-                                   'CGST + SGST या IGST अपने आप जुड़ते हैं', 'Tax Invoice या Bill of Supply शीर्षक',
-                                   'बिल पर आपका UPI QR कोड'], 'span-2'),
-    ('hard-drive', 'आपके कंप्यूटर पर, निजी', ['बिना इंटरनेट के चलता है', 'डेटा आपके अपने कंप्यूटर पर',
-                                              'एक क्लिक में बैकअप और रीस्टोर', 'एक कंप्यूटर पर कई कंपनियां',
-                                              'कर्मचारियों के लिए अलग लॉगिन (admin या user)', 'ऑनलाइन खाते की ज़रूरत नहीं'], 'span-3'),
-    ('globe', 'हिन्दी और दूसरी भाषाएं', ['हिन्दी, English, तमिल सहित 8 भाषाएं (तिब्बती आंशिक रूप से अनुवादित)', 'PDF और रसीद पर हिन्दी और तमिल अक्षर सही छपते हैं',
-                                         'अपनी मुद्रा (currency) चुनें', 'USB बारकोड स्कैनर',
-                                         'हर बिक्री के बाद थर्मल रसीद अपने आप प्रिंट हो सकती है'], 'span-3'),
-]
-hi_features = section(section_head('सुविधाएं', 'एक छोटी दुकान को चाहिए सारे बिलिंग टूल',
-                                   'आपके काम करने के तरीके के हिसाब से सजाए गए — और सब मुफ़्त।', 'feat-title')
-                      + '<div class="bento mt-4">' + ''.join(f'<div class="group-card {c}"><div class="group-card-head">{tile(i)}<h3>{t}</h3></div>{checks(items)}</div>'
-                                                             for i, t, items, c in HI_GROUPS) + '</div>',
-                      'features', '', 'feat-title')
-
-HI_SHOTS = {'dashboard': ('डैशबोर्ड', 'वसूला हुआ और बकाया पैसा, महीने की बिक्री, इनवॉइस की स्थिति और हाल के इनवॉइस।'),
-            'create-invoice': ('नया इनवॉइस', 'ग्राहक, आइटम, GST और कुल — सब एक ही स्क्रीन पर।'),
-            'invoices': ('इनवॉइस', 'देखिए क्या चुका है, क्या बाकी है; और कोई भी बिल जल्दी खोजिए।'),
-            'customers': ('ग्राहक', 'फ़ोन, GSTIN और हर ग्राहक पर कितना बकाया है।'),
-            'products': ('उत्पाद', 'कीमत, HSN कोड, टैक्स और स्टॉक — कम स्टॉक तुरंत दिख जाता है।'),
-            'reports': ('रिपोर्ट', 'महीने-दर-महीने बिल की रकम, वसूली और बकाया।')}
-HI_DOCS = {'invoice-a4': ('प्रिंट किया हुआ इनवॉइस (A4)', 'Classic डिज़ाइन में GST इनवॉइस — ठीक वैसा जैसा ग्राहक को मिलता है।',
-                          f'{NAME} से छपा नमूना A4 GST इनवॉइस: Sri Murugan Traders ने Kannan Stores को छह आइटम का बिल दिया, CGST और SGST के साथ, कुल Rs. 7019.10'),
-           'receipt-80mm': ('थर्मल रसीद (80 mm)', 'तमिल आइटम नामों के साथ काउंटर रसीद, सही छपी हुई।',
-                            'तीन तमिल आइटम नामों के साथ नमूना 80 mm थर्मल रसीद, पूरा भुगतान, कुल Rs. 1036.60')}
-hi_shots = section(section_head('स्क्रीनशॉट', 'इंस्टॉल करने से पहले हर स्क्रीन देखिए',
-                                f'हिन्दी में चलते {NAME} की असली स्क्रीन और उससे छपे दस्तावेज़, एक नमूना दुकान के डेटा के साथ।', 'shots-title')
-                   + '<div class="shots mt-4">'
-                   + ''.join(f'<figure class="shot{" shot-wide" if i == 0 and doc_cards else ""}">{window(hi_shot(n), f"हिन्दी में {NAME} की {HI_SHOTS[n][0]} स्क्रीन")}'
-                             f'<figcaption><b>{HI_SHOTS[n][0]}</b><span>{HI_SHOTS[n][1]}</span></figcaption></figure>' for i, (n, _, _) in enumerate(screen_cards))
-                   + ''.join(f'<figure class="shot">{paper(n, cls, HI_DOCS[n][2])}<figcaption><b>{HI_DOCS[n][0]}</b><span>{HI_DOCS[n][1]}</span></figcaption></figure>'
-                             for n, cls, _, _, _ in doc_cards)
-                   + '</div>',
-                   'screenshots', 'section-subtle', 'shots-title')
-
-HI_WHO = [('shopping-bag', 'किराना और खुदरा दुकानें', 'बारकोड स्कैनिंग और थर्मल रसीद के साथ तेज़ काउंटर बिलिंग।'),
-          ('package', 'दवा की दुकानें और मेडिकल शॉप', 'उत्पादों पर बैच नंबर और एक्सपायरी तारीख, कम स्टॉक की चेतावनी के साथ।'),
-          ('truck', 'व्यापारी और थोक विक्रेता', 'HSN कोड के साथ GST इनवॉइस, स्टॉक की स्थिति और ग्राहकों का बकाया।'),
-          ('user', 'फ़्रीलांसर और सलाहकार', 'साफ़ PDF कोटेशन और इनवॉइस, और किसने भुगतान किया इसकी साफ़ तस्वीर।'),
-          ('tool', 'सर्विस और रिपेयर की दुकानें', 'पुर्ज़ों और मज़दूरी का फटाफट बिल, आंशिक भुगतान और रसीद।'),
-          ('briefcase', 'कोई भी छोटा कारोबार', 'एक कंप्यूटर पर कई कंपनियां और कर्मचारियों के लॉगिन — सब मुफ़्त।')]
-hi_who = section(section_head('किसके लिए?', 'छोटे कारोबार जिस तरह काम करते हैं, उसी के हिसाब से बना', hid='who-title')
-                 + '<div class="grid-auto-wide mt-4">' + ''.join(f'<div class="usecase">{tile(i, "neutral")}<div><h3>{t}</h3><p>{d}</p></div></div>' for i, t, d in HI_WHO) + '</div>',
-                 'who', '', 'who-title')
-
-HI_INDIA = ['GSTIN, HSN/SAC और CGST + SGST या IGST', 'इनवॉइस पर UPI QR कोड', 'रकम डिफ़ॉल्ट रूप से रुपये में', 'स्क्रीन और कागज़ दोनों पर हिन्दी और तमिल']
-HI_HINDI = ['मेन्यू, बटन और ज़्यादातर स्क्रीन हिन्दी में', 'उत्पाद और ग्राहकों के नाम हिन्दी में सेव करें',
-            'हिन्दी नाम PDF और थर्मल रसीद पर सही छपते हैं', 'कभी भी English में वापस जा सकते हैं']
-HI_ENERGY_WORK = [
-    'उत्पादित यूनिट, आवंटित यूनिट, और महीने की दर पर बिल की जाने वाली शुद्ध यूनिट',
-    'महीने की कटौतियां “Less:” के अंतर्गत — ट्रांसमिशन, व्हीलिंग, शेड्यूलिंग, मीटर रीडिंग और अन्य — '
-    'तय रकम के रूप में या प्रति यूनिट (जैसे 10 पैसे का स्व-उत्पादन कर)',
-    'कुल खर्च, राउंड ऑफ़ और शुद्ध रकम, रकम शब्दों में भी',
-    'पिछले महीने के शब्द, दर और कटौतियां याद रखता है, इसलिए नए बिल में सिर्फ़ नए आंकड़े भरने होते हैं',
-    'कंपनी के अपने ढंग के बिल नंबर, हर वित्त वर्ष में फिर से शुरू (जैसे ABC/26-27/001)',
-    'किसी भी इनवॉइस की तरह सेव होता है, इसलिए भुगतान, बकाया और रिपोर्ट हमेशा की तरह काम करते हैं',
-]
-hi_customers = section(
-    '<div class="review-story stack">'
-    + section_head('ग्राहक', 'Green &amp; Green Agri Solutions के लिए बनाया गया बिजली (energy) बिल',
-                   'पवन और सौर बिजली बेचने वाली कंपनी का मासिक बिल: यूनिट, दर, कटौतियां और शुद्ध रकम — हर महीने कुछ ही क्लिक में।', 'tm-title')
-    + f'<p class="center">{badge("कस्टम सुविधा", "brand", "tool")}</p>'
-    + f'<figure class="doc-full"><a href="{_energy_png}" target="_blank" rel="noopener" title="पूरे आकार में खोलें">'
-      f'<img src="{_energy_png}" width="{_ew}" height="{_eh}" alt="{NAME} में बना नमूना बिजली बिल: उत्पादित और आवंटित यूनिट, शुद्ध यूनिट, कटौतियां और शुद्ध रकम" loading="lazy" decoding="async"></a>'
-      '<figcaption>नमूना डेटा के साथ दिखाया गया है: इसमें लिखे सारे नाम और आंकड़े काल्पनिक हैं।</figcaption></figure>'
-    + ''.join(testimonial_card(t, 'hi', link=False) for t in TESTIMONIALS)
-    + f'<div class="card stack"><h3 class="h4">यह बिल क्या करता है?</h3>{checks(HI_ENERGY_WORK)}</div>'
-    + '<div class="stack" style="align-items: center; text-align: center; gap: 14px">'
-      '<p>अपने कारोबार के लिए भी ऐसा बिल चाहिए? यह एक सशुल्क सेवा है, और हर अनुरोध का अलग से भाव बताया जाता है।</p>'
-      '<div class="cta-row" style="justify-content: center">'
-      f'<span data-block>{btn("WhatsApp पर पूछें", "#", "primary", "", "message", attrs=" data-whatsapp target=" + chr(34) + "_blank" + chr(34) + " rel=" + chr(34) + "noopener" + chr(34))}</span>'
-      f'{btn("Customization पेज (English)", "customization.html#request", "secondary", "", "arrow")}'
-      '</div></div>'
-    + '</div>',
-    'customers', 'section-subtle', 'tm-title')
-
-hi_hindi = section(section_head('हिन्दी में', 'हिन्दी में चलाइए, हिन्दी में प्रिंट कीजिए',
-                                f'{NAME} भारत में, भारतीय बिलिंग नियमों के लिए बनाया गया है। ऐप की भाषा अपनी सुविधा से चुनिए।', 'lg-title')
-                   + '<div class="split split-stretch mt-4">'
-                   + f'<div class="group-card is-subtle"><div class="group-card-head">{tile("globe")}<h3>हिन्दी में बिलिंग</h3></div>{checks(HI_HINDI)}'
-                   + f'<div class="stack" style="gap:10px"><p class="chips-label">ऐप की भाषाएं</p><div class="chips">{langs}</div></div></div>'
-                   + f'<div class="group-card is-subtle"><div class="group-card-head">{tile("percent")}<h3>भारत के लिए</h3></div>{checks(HI_INDIA)}</div>'
-                   + '</div>', 'hindi', '', 'lg-title')
-
-hi_privacy = f'''<section class="section section-night on-dark" id="privacy" aria-labelledby="priv-title">
-  <div class="wrap split">
-    <div>
-      {section_head('गोपनीयता', 'आपके कारोबार का डेटा आपका अपना है।', f'{NAME} आपके कारोबार का डेटा आपके कंप्यूटर पर रखता है। आपके ग्राहकों, कीमतों या बिक्री की कोई जानकारी हमें या किसी और को नहीं भेजी जाती।', 'priv-title', left=True)}
-      {checks(['बिना इंटरनेट के चलता है', 'आपके कंप्यूटर पर सेव', 'न खाता, न सब्सक्रिप्शन', 'बैकअप तब, जब आप चाहें'], 'checks-grid mt-3')}
-      <p class="mt-3 small"><a href="privacy.html" style="color: var(--night-accent)">गोपनीयता नीति पढ़ें (English)</a></p>
-    </div>
-    <div class="vault">
-      <div class="vault-head">{tile('monitor', 'night')}<div><b>आपका कंप्यूटर</b><span>{NAME} जो कुछ सेव करता है, यहीं रहता है</span></div></div>
-      <ul class="vault-items">{''.join(f'<li>{icon(i)}{t}</li>' for i, t in [('file', 'इनवॉइस'), ('users', 'ग्राहक'), ('package', 'उत्पाद'), ('database', 'बैकअप')])}</ul>
-      <hr>
-      <p class="vault-foot">{icon('cloud-off')}<span><b>आपके कारोबार का डेटा कभी अपलोड नहीं होता।</b> {NAME} का कोई क्लाउड नहीं है और साइन इन करने के लिए कोई खाता नहीं।</span></p>
-    </div>
-  </div>
-</section>'''
-
-hi_free = section(
-    '<div class="split"><div>'
-    + section_head('ओपन सोर्स', 'सबके सामने खुला बना',
-                   f'{NAME} का सोर्स कोड MIT License के तहत सार्वजनिक है। हमारी बात पर आंख मूंदकर भरोसा करने की ज़रूरत नहीं।', 'os-title', left=True)
-    + checks(['खुद पढ़कर देखिए कि ऐप आपके डेटा के साथ क्या करता है', 'MIT License के तहत मुफ़्त इस्तेमाल, कॉपी और बदलाव',
-              'जितने चाहें उतने कंप्यूटर पर मुफ़्त चलाइए'], 'mt-3')
-    + '</div><div class="stack">'
-    + f'<div class="repo-card"><div class="group-card-head">{tile("code")}<h3 class="h4">MIT License</h3></div>'
-    + f'<p>{NAME}, ANOOP P के बनाए Invoiso पर आधारित है, जो खुद भी MIT License के तहत जारी है। '
-      'लाइसेंस का पाठ <a href="licenses.html">Licenses पेज</a> (English) पर पढ़ें।</p>'
-    + f'<div class="badges">{badge("ओपन सोर्स", "neutral", "code")}{badge("नवीनतम संस्करण <span data-version>" + VERSION + "</span>", "neutral", "download")}</div></div>'
-    + f'<div class="card card-note"><h3 class="h4">यह मुफ़्त कैसे है?</h3><p>{NAME} को {BUSINESS} बनाता है और यह MIT लाइसेंस वाले प्रोजेक्ट Invoiso पर आधारित है। '
-      'कोई पैसे वाला वर्ज़न नहीं है। जिन कारोबारों को कुछ खास चाहिए, उनके लिए वैकल्पिक '
-      f'<a href="customization.html">सशुल्क customization</a> और <a href="{COFFEE}" target="_blank" rel="noopener">दान</a> से इसका विकास चलता है।</p></div>'
-    + '</div></div>', 'open-source', '', 'os-title')
-
-HI_TRUST = ('<div class="dl-trust">' + ''.join(badge(t, 'teal', 'check') for t in
-                                              ['हमेशा मुफ़्त', 'क्रेडिट कार्ड नहीं चाहिए', 'सब्सक्रिप्शन नहीं', 'ओपन सोर्स']) + '</div>')
-HI_PHONE_NOTE = phone_note('hi')
-HI_FIRST_STEPS = [
-    ('download', 'डाउनलोड', 'ऊपर अपना कंप्यूटर चुनिए।'),
-    ('package', 'इंस्टॉल', 'फ़ाइल खोलिए और बताए कदमों का पालन कीजिए।'),
-    ('user', 'लॉगिन और सेटअप', 'पहली स्क्रीन ही बताएगी कि लॉगिन कैसे करें। फिर अपने कारोबार का विवरण जोड़िए।'),
-    ('file', 'पहला इनवॉइस', 'ग्राहक और आइटम जोड़िए, फिर इनवॉइस बनाइए।'),
-    ('printer', 'प्रिंट या PDF', 'A4 या थर्मल प्रिंटर पर प्रिंट कीजिए, या PDF सेव कीजिए।'),
-]
-hi_download = section(
-    section_head('डाउनलोड', 'आज ही मुफ़्त में बिलिंग शुरू कीजिए',
-                 f'{NAME} <span data-version>{VERSION}</span> · जारी: {RELEASE_DATE_HI} · <a href="changelog.html">नया क्या है (English)</a>', 'dl-title')
-    + f'<div class="mt-2">{HI_TRUST}</div><div class="mt-2">{HI_PHONE_NOTE}</div>'
-    + f'<div class="mt-3">{dl_grid(full=True, lang="hi")}</div>'
-    + f'<div class="mt-2"><p class="center small muted">अपना डाउनलोड जाँचने के लिए: <a href="{DL}SHA256SUMS.txt">SHA-256 checksums</a></p></div>'
-    + '<h3 class="h3 center" style="margin: 72px 0 20px">कुछ ही मिनटों में शुरू</h3>'
-    + first_steps('h4', HI_FIRST_STEPS, 'कदम'),
-    'download', 'section-subtle', 'dl-title')
-
-HI_FAQ = [
-    (f'क्या {NAME} सच में मुफ़्त है?', 'हाँ। हर सुविधा मुफ़्त है — न ट्रायल, न सब्सक्रिप्शन, न पैसे वाला वर्ज़न। जितने चाहें उतने कंप्यूटर पर इंस्टॉल कीजिए।', True),
-    (f'क्या {NAME} ओपन सोर्स है?', 'हाँ। यह MIT License के तहत जारी है, इसलिए कोई भी कोड पढ़ सकता है, इस्तेमाल कर सकता है और बदल सकता है।', True),
-    ('क्या यह बिना इंटरनेट के चलता है?', 'हाँ। इंटरनेट सिर्फ़ डाउनलोड करने के लिए चाहिए। बिलिंग, प्रिंटिंग और रिपोर्ट सब बिना इंटरनेट के चलते हैं।', True),
-    ('क्या मुझे खाता बनाना पड़ेगा?', 'ऑनलाइन खाता नहीं। ऐप का अपना लॉगिन आपके कंप्यूटर पर ही है, इसलिए हर व्यक्ति का अलग पासवर्ड हो सकता है।', True),
-    ('मेरा डेटा कहाँ सेव होता है?', f'आपके कंप्यूटर पर, {NAME} के data फ़ोल्डर में। कॉपी सुरक्षित जगह रखने के लिए <b>Settings → Backup</b> इस्तेमाल कीजिए।', False),
-    ('क्या GST और UPI की सुविधा है?', 'हाँ — GSTIN, HSN/SAC, CGST + SGST या IGST, और इनवॉइस पर आपका UPI QR कोड।', False),
-    ('यह किन कंप्यूटरों पर चलता है?', 'Windows 10 और 11 (64-bit), macOS 12 या बाद का, और Linux (.deb या AppImage)। फ़ोन ऐप नहीं है।', False),
-    ('क्या मैं नए कंप्यूटर पर जा सकता हूँ?', f'हाँ। पुराने कंप्यूटर पर बैकअप लीजिए, नए पर {NAME} इंस्टॉल कीजिए और वहाँ बैकअप रीस्टोर कीजिए।', False),
-    ('क्या इसे भारत के बाहर इस्तेमाल कर सकते हैं?', 'हाँ। अपनी मुद्रा और भाषा चुनिए; जब GST फ़ील्ड की ज़रूरत न हो तो उन्हें बंद किया जा सकता है।', False),
-    ('क्या यह छोटी दुकान के लिए ठीक है?', 'हाँ — बारकोड स्कैनिंग, थर्मल रसीद, स्टॉक की निगरानी और रोज़ की बिक्री की रिपोर्ट पहले से शामिल हैं।', False),
-    ('यह मुफ़्त कैसे है?', 'कोई पैसे वाला वर्ज़न नहीं है। वैकल्पिक <a href="customization.html">सशुल्क customization</a> और दान से विकास चलता है।', False),
-    ('इंस्टॉल करते समय Windows चेतावनी क्यों देता है?', 'इंस्टॉलर पर अभी code-sign नहीं हुआ है। <b>More info</b> दबाइए, फिर <b>Run anyway</b>।', False),
-]
-hi_faq = section(
-    section_head('सवाल', 'डाउनलोड से पहले लोग जो पूछते हैं', hid='faq-title')
-    + '<div class="faq-grid mt-4">' + ''.join('<div class="faq-col">' + ''.join(faq_item(q, a, o) for q, a, o in col) + '</div>'
-                                             for col in (HI_FAQ[0::2], HI_FAQ[1::2])) + '</div>'
-    + '<p class="center mt-3">अब भी दुविधा है? <span data-block><a data-whatsapp target="_blank" rel="noopener">WhatsApp पर पूछिए</a>, </span>'
-      '<a href="faq.html">सारे जवाब पढ़िए (English)</a> या <a href="contact.html">हमसे संपर्क कीजिए</a>।</p>',
-    'faq', '', 'faq-title')
-
-hi_cta = f'''<section class="cta-section" aria-labelledby="cta-title">
-  <div class="wrap">
-    <div class="cta-band">
-      <h2 id="cta-title">सरल बिलिंग। मासिक बिल नहीं।</h2>
-      <p class="lead">{NAME} डाउनलोड कीजिए और आज ही अपना पहला इनवॉइस बनाइए।</p>
-      <div class="cta-row">
-        {btn(f'{NAME} डाउनलोड — हमेशा मुफ़्त', '#download', 'inverse', 'lg', 'download')}
-        {btn('हमसे संपर्क करें', 'contact.html', 'on-dark', 'lg', 'message')}
-      </div>
-    </div>
-  </div>
-</section>'''
-
-page('hi.html', f'मुफ़्त बिलिंग सॉफ़्टवेयर हिन्दी में — GST बिल, बिना इंटरनेट | {NAME}',
-     # Under 160 characters: the offline sentence is left to the title (बिना इंटरनेट).
-     f'{NAME} — दुकानों के लिए मुफ़्त बिलिंग सॉफ़्टवेयर। हिन्दी में GST बिल, कोटेशन और रसीद बनाइए। '
-     'Windows, Mac और Linux के लिए मुफ़्त डाउनलोड।',
-     'home', '\n\n'.join([hi_hero, hi_facts, hi_why, hi_how, hi_features, hi_shots, hi_who, hi_customers, hi_hindi, hi_privacy, hi_free,
-                          hi_download, hi_faq, hi_cta]),
-     lang='hi',
-     jsonld=[software_ld('छोटी दुकानों के लिए मुफ़्त, ओपन सोर्स, ऑफ़लाइन बिलिंग और GST इनवॉइस सॉफ़्टवेयर।', HI_GROUPS, hi_shot),
-             WEBSITE_LD])
+for _lang in HOME_LANGS:
+    _T = TEXT[_lang]
+    _sec = home_sections(_lang)
+    if _lang == 'en':
+        EN, EN_HOME = _T, _sec          # the English text and sections, for the AI-summary files at the end
+    page(HOMES[_lang], _T['page']['title'], _T['page']['description'], 'home',
+         '\n\n'.join(_sec[k] for k in HOME_ORDER if k in _sec),
+         lang=_lang,
+         jsonld=[software_ld(_T['page']['jsonld_description'], _T['features']['groups'], lambda n, _l=_lang: shot_file(n, _l)),
+                 WEBSITE_LD])
 
 # ──────────────────────────────── Download ─────────────────────────────────
 
@@ -1560,6 +976,7 @@ download_body = page_head(
   <div class="wrap">
     {TRUST}
     <div class="mt-2">{PHONE_NOTE}</div>
+    <h2 class="sr-only">Download for your computer</h2>
     <div class="mt-3">{dl_grid(full=True)}</div>
     <div class="mt-2">{CHECKSUMS}</div>
   </div>
@@ -1663,10 +1080,11 @@ customization_body = page_head(
   <div class="wrap narrow">
     {section_head('Request', 'Request a customization', 'Prices depend on the work, so we do not list fixed prices. You will always see the quote first.', 'request-title')}
     <p class="center mt-2" data-block>{btn('Open the form in a new tab', '#', 'secondary', '', 'external-link', attrs=' data-href="forms.customization" data-hide-empty target="_blank" rel="noopener"')}</p>
+    <div id="customization-form-gate" class="form-gate hidden mt-3"><p>The form is a Google Form. Showing it here lets Google load content and set cookies, so it only loads when you ask.</p><button type="button" class="btn btn-secondary">Show the form on this page</button></div>
     <iframe id="customization-form" class="form-frame hidden mt-3" title="Customization request form" loading="lazy"></iframe>
     <div id="customization-form-missing" class="form-missing mt-3">
-      <p><b>The request form is coming soon.</b></p>
-      <p>Until then, write to us at <a href="mailto:{EMAIL}?subject=Customization%20request">{EMAIL}</a><span data-block> or message us on <a data-whatsapp target="_blank" rel="noopener">WhatsApp</a></span>.</p>
+      <p><b>The request form is not shown on this page.</b></p>
+      <p>Open it in a new tab with the button above, or write to us at <a href="mailto:{EMAIL}?subject=Customization%20request">{EMAIL}</a><span data-block> or message us on <a data-whatsapp target="_blank" rel="noopener">WhatsApp</a></span>.</p>
     </div>
     <p class="center small mt-3">Questions first? Read the <a href="faq.html#help-and-custom-work">answers about custom work</a> or see <a href="contact.html">all the ways to contact us</a>.</p>
   </div>
@@ -1694,15 +1112,15 @@ FAQ_GROUPS = [
          ['Everything you enter is saved on your own computer, in the app’s data folder. Your customers, products and invoices are not sent to us.',
           'Because the data is on your computer, keeping it safe is in your hands: use <b>Settings → Backup</b> in the app regularly.']),
         ('Does Invoiceo collect any data?',
-         ['Only a few anonymous usage counts, so we know how many people use the app: when it is first opened, once a day while it is used, and once when the first invoice is made. Each count carries a random ID, the app version and the operating system, nothing else.',
+         ['Only a few anonymous usage counts, so we know how many people use the app: when it is first opened, once a day while it is used, and once when the first invoice is made. Each count carries a random ID (the same one on that computer), the app version and the operating system, nothing else.',
           'Your customers, products, invoices, amounts and company details are never sent. You can turn the counts off in <b>Settings → Software Info</b>. See the <a href="privacy.html">privacy policy</a>.']),
     ]),
     ('Billing and printing', [
         ('Can I use Invoiceo for GST billing?',
          ['Yes. You can add your GSTIN and your customers’ GSTINs, HSN/SAC codes and tax rates per product or for the whole invoice. Invoices show CGST and SGST, or IGST for sales to another state, and you can choose titles such as Tax Invoice or Bill of Supply.',
           'Invoiceo helps you prepare correct invoices; for filing returns, please follow your accountant’s advice.']),
-        ('Can I use it outside India?',
-         'Yes. Choose the currency you bill in and one of eight app languages. GST fields can be turned off in the invoice settings when you don’t need them.'),
+        ('Can I use it in my country?',
+         'Yes, in any country. Choose the currency you bill in and one of eight app languages, set your own tax rates, and turn the GST fields off in the invoice settings when you don’t need them.'),
         ('Which printers can I use?',
          'Any printer your computer can print to, for A4, A5 and A6 invoices. For receipts, Invoiceo supports 58 mm and 80 mm thermal printers and can print the receipt automatically after each sale (in the Modern layout).'),
         ('Can I use it in Tamil?',
@@ -1797,7 +1215,8 @@ reviews_body = page_head('Reviews', 'What our customers say',
 
 <section class="section section-subtle" aria-labelledby="rv-about">
   <div class="wrap">
-    <div class="prose" style="margin: 0 auto">
+    <div class="about-grid">
+    <div class="card about-card about-wide">
     <h2 id="rv-about">About this custom work</h2>
     <p>Green &amp; Green Agri Solutions, in Udumalai, works in agricultural products and solar power. Each month they bill for the
       wind and solar power they generate, and that bill has its own rules: units, a monthly rate and a list of deductions that
@@ -1806,11 +1225,13 @@ reviews_body = page_head('Reviews', 'What our customers say',
       version of {NAME} made for that shop, and it is not part of the free app.</p>
     <p>If your trade needs a bill of its own, see <a href="customization.html">custom bill formats
       and features</a>. Every request is quoted on its own, and you decide before any work starts.</p>
-
+    </div>
+    <div class="card about-card">
     <h2>How we show reviews</h2>
     <p>Every review on this page comes from a real business that uses {NAME}. We show it only with their permission, in words they
       have approved, and we name the business only when they agree. There are no star ratings or sample reviews here.</p>
-
+    </div>
+    <div class="card about-card">
     <h2>Share your experience</h2>
     <p>If you use {NAME}, we would like to hear from you, whether it is praise, a problem or an idea. Helpful things to tell us:</p>
     <ul>
@@ -1821,6 +1242,7 @@ reviews_body = page_head('Reviews', 'What our customers say',
     <p>Use the buttons below to send it. Something not working? The <a href="contact.html">contact page</a> has the support
       form, and the <a href="faq.html">frequently asked questions</a> may already have the answer. Not using {NAME} yet?
       <a href="download.html">Download it free for Windows, macOS or Linux</a>.</p>
+    </div>
     </div>
   </div>
 </section>
@@ -1840,8 +1262,8 @@ page('reviews.html', 'Customer reviews and custom billing work',
      'sales-and-purchase bill for a farm shop.',
      'reviews', reviews_body, crumb='Customer reviews')
 
-page('faq.html', 'FAQ: free offline GST billing software',
-     f'Answers about {NAME}: price, open source, offline use, where data is stored, GST, printers, Tamil, barcode scanners, installing and updating.',
+page('faq.html', 'FAQ: free offline invoicing software',
+     f'Answers about {NAME}: price, open source, offline use, where data is stored, taxes and currencies, printers, languages, barcode scanners, installing and updating.',
      'faq', faq_body, crumb='FAQ', jsonld={
          '@context': 'https://schema.org',
          '@type': 'FAQPage',
@@ -1915,35 +1337,38 @@ PICK_OTHER = ['You file GST returns from the software, or need e-invoice and e-w
               'You want WhatsApp or SMS reminders sent from the software',
               'You need full accounting with ledgers and a balance sheet']
 
+# The page shows the rows where {NAME} has the feature (a tick); the rows it does not have are covered by "Choose another if…" below,
+# the FAQ and the AI summary files, which keep the full table.
+CMP_ICONS = {'The free plan': 'gift', 'Works without internet': 'wifi-off', 'Sign-up or account': 'user', 'Where your data is kept': 'hard-drive',
+             'Open source': 'code', 'Languages': 'globe'}
 compare_th = ''.join(
-    (f'<th scope="col" class="us"><span class="us-pill">Free forever</span><br>{n}</th>' if not u else
+    (f'<th scope="col" class="us"><span class="us-pill">Free forever</span><span class="cmp-name">{n}</span></th>' if not u else
      f'<th scope="col"><a href="{u}" target="_blank" rel="noopener nofollow">{n}</a></th>')
     for n, u in COMPARE_COLS)
 compare_tr = ''.join(
-    f'<tr><th scope="row">{t}</th>' + ''.join(
-        f'<td{" class=\"us\"" if i == 0 else ""}><span class="mk mk-{COMPARE_TONES[ri][i]}" aria-hidden="true"></span>{c}</td>'
+    f'<tr><th scope="row"><span class="cmp-ic">{icon(CMP_ICONS[t])}</span><span>{t}</span></th>' + ''.join(
+        f'<td{" class=\"us\"" if i == 0 else ""} data-label="{COMPARE_COLS[i][0]}"><span class="ck ck-{COMPARE_TONES[ri][i]}" aria-hidden="true"></span><span class="ct">{c}</span></td>'
         for i, c in enumerate(cells)) + '</tr>'
-    for ri, (t, cells) in enumerate(COMPARE_ROWS))
+    for ri, (t, cells) in enumerate(COMPARE_ROWS) if COMPARE_TONES[ri][0] == 'y')
 GLANCE = [('gift', 'No invoice limit', 'free, with no trial'), ('wifi-off', 'Works offline', 'no internet needed'),
           ('lock', 'No sign-up', 'data stays on your PC'), ('code', 'Open source', 'MIT License')]
 glance = ('<div class="facts-strip compare-glance"><ul class="wrap facts facts-4">'
           + ''.join(f'<li class="fact">{tile(i, "teal", "md")}<div><b>{v}</b><span>{l}</span></div></li>' for i, v, l in GLANCE)
           + '</ul></div>')
 compare_body = page_head('Compare', f'{NAME} compared with Vyapar, myBillBook, Tally and Sleek Bill',
-                         f'A plain side-by-side look at free billing software for Indian shops. Checked on {COMPARE_CHECKED} from each company’s own website.',
+                         f'A plain side-by-side look at free billing software popular with small businesses in India. Checked on {COMPARE_CHECKED} from each company’s own website.',
                          extra=f'<div class="badges mt-2">{badge("Free forever", "teal", "gift")}{badge("Works offline", "brand", "wifi-off")}{badge("Open source", "neutral", "code")}</div>') + glance + f'''
 
 <section class="page-body">
   <div class="wrap">
-    <div class="compare-wrap" role="region" aria-label="Comparison table" tabindex="0">
-      <table class="compare">
+    <div class="cmp-wrap">
+      <table class="cmp">
         <thead><tr><th scope="col"><span class="sr-only">Feature</span></th>{compare_th}</tr></thead>
         <tbody>{compare_tr}</tbody>
       </table>
     </div>
-    <p class="compare-hint small">Swipe sideways to see every column →</p>
-    <ul class="compare-legend"><li><span class="mk mk-y"></span>Included</li><li><span class="mk mk-p"></span>Partly, or with limits</li>
-      <li><span class="mk mk-n"></span>Not available</li><li><span class="mk mk-x"></span>Not listed on their page</li></ul>
+    <ul class="cmp-legend"><li><span class="ck ck-y"></span>Included</li><li><span class="ck ck-p"></span>Partly, or with limits</li>
+      <li><span class="ck ck-n"></span>Not available</li><li><span class="ck ck-x"></span>Not listed on their page</li></ul>
     <p class="small mt-2">Checked on {COMPARE_CHECKED} from the home or pricing pages linked above. Plans, limits and prices change, so please check
       their websites before you decide. “Not listed” means that page did not say. All product names belong to their owners;
       {NAME} is not connected to them.</p>
@@ -2012,7 +1437,8 @@ contact_body = page_head('Contact', 'Talk to us', 'Questions, problems or ideas 
 
 <section class="section section-subtle" aria-labelledby="ct-which">
   <div class="wrap">
-    <div class="prose">
+    <div class="about-grid">
+    <div class="card about-card about-wide">
     <h2 id="ct-which">Which way to choose</h2>
     <ul>
       <li><b>Something not working</b> with installing, printing or billing: use the support form above, so all the details reach us in one place.</li>
@@ -2021,7 +1447,8 @@ contact_body = page_head('Contact', 'Talk to us', 'Questions, problems or ideas 
       <li data-block><b>Ideas and reviews</b>: use the <a data-href="forms.feedback" data-hide-empty target="_blank" rel="noopener">feedback form</a>. We publish a review only with your permission; <a href="reviews.html">read our customer review</a>.</li>
       <li><b>A feature, report or bill format made for your business</b>: this is a paid service, quoted per request. The quote is free, and no work starts until you approve it. <a href="customization.html#request">Request a customization</a>.</li>
     </ul>
-
+    </div>
+    <div class="card about-card">
     <h2>What to include in a support request</h2>
     <p>A few details help us find the problem quickly, often without having to ask you again:</p>
     <ol>
@@ -2033,12 +1460,14 @@ contact_body = page_head('Contact', 'Talk to us', 'Questions, problems or ideas 
     </ol>
     <p>Your business data stays on your computer, so you do not need to send backups or customer lists; a screenshot of the
       problem is usually enough. How we use what you send us is explained in the <a href="privacy.html">privacy policy</a>.</p>
-
+    </div>
+    <div class="card about-card">
     <h2>Before you write</h2>
     <p>Many questions are already answered in the <a href="faq.html">frequently asked questions</a>: price, offline use, GST,
       printers, backups and moving to a new computer. If Windows or macOS warns you while installing, the
       <a href="download.html">download page</a> has the steps for each system. Using an older version? See
       <a href="changelog.html">what’s new in each release</a>; your problem may already be fixed in the latest one.</p>
+    </div>
     </div>
   </div>
 </section>'''
@@ -2049,7 +1478,6 @@ page('contact.html', 'Contact us: support, WhatsApp and customization',
      'contact', contact_body, crumb='Contact', page_type='ContactPage')
 
 # ───────────────────────────────── Updates ─────────────────────────────────
-MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 
 def date_tag(iso):
@@ -2162,6 +1590,37 @@ page('changelog.html', 'What’s new: release notes and version history',
      'release dates.',
      'changelog', changelog_body, crumb='What’s new')
 
+
+# ───────────────────── Legal pages: numbered cards with a topic list on the left ─────────────────────
+def legalize(title, lead, chips, body):
+    """Turns a plain legal page (an intro, then <h2> sections) into the site's card layout: a short intro card, one card per
+    section with a number, and a sticky 'On this page' list. The text itself is untouched. chips: three short facts that float
+    behind the title (site.js)."""
+    prose = re.search(r'<div class="prose">(.*)</div>\s*</div>\s*</section>', body, re.S).group(1)
+    parts = re.split(r'(?=<h2>)', prose)
+    intro, secs = parts[0].strip(), [x for x in parts[1:] if x.strip()]
+    nav, cards = '', ''
+    for i, sec in enumerate(secs):
+        h = re.match(r'<h2>(.*?)</h2>', sec, re.S).group(1)
+        text = re.sub(r'^\d+\.\s*', '', h)                      # the card shows its own number
+        slug = re.sub(r'[^a-z0-9]+', '-', re.sub(r'<[^>]+>|&[a-z]+;', '', text).lower()).strip('-')
+        n, a = f'{i + 1:02d}', i % 5 + 1
+        nav += f'<a class="lg{a}" href="#{slug}"><b>{n}</b><span>{text}</span></a>'
+        cards += (f'<section class="legal-sec lg{a}" id="{slug}"><h2><b>{n}</b><span>{text}</span></h2>'
+                  f'<div class="prose">{sec[sec.index("</h2>") + 5:].strip()}</div></section>')
+    head = page_head('Legal', title, lead, f'<p class="legal-meta"><span>Last updated: {date_tag(RELEASE_ISO)}</span></p>')
+    return (head + f'''
+
+<section class="page-body">
+  <div class="wrap legal-wrap">
+    <nav class="legal-nav" aria-label="On this page"><p class="ln-title">On this page</p>{nav}<p class="ask">Questions? <a href="mailto:{EMAIL}">Write to us</a>.</p></nav>
+    <div class="legal-main" data-chips="{esc('|'.join(chips))}">
+      {f'<div class="legal-intro">{intro}</div>' if intro else ''}
+      {cards}
+    </div>
+  </div>
+</section>''')
+
 # ───────────────────────────────── Privacy ─────────────────────────────────
 privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {date_tag(RELEASE_ISO)}') + f'''
 
@@ -2173,7 +1632,7 @@ privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {date_tag(RE
     <h2>The {NAME} app</h2>
     <ul>
       <li><b>Your business data stays on your computer.</b> The customers, products, invoices, payments, settings and backups you create are stored on the computer where {NAME} is installed. We do not receive a copy. The FAQ explains <a href="faq.html#about-invoiceo">where your data is stored and how to back it up</a>.</li>
-      <li><b>Anonymous usage counts.</b> So that we know how many people use {NAME}, the app (from <a href="changelog.html#v1.0.4">version 1.0.4</a>) sends us a short message when it is first opened, once a day while it is used, and once when the first invoice is created. Each message carries only a random ID made for this purpose, the app version and the operating system (Windows, macOS or Linux). It never includes your customers, products, invoices, amounts or company details. The messages go to a small server we run on Cloudflare, which does not store IP addresses; Cloudflare’s handling is described in the <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare Privacy Policy</a>. You can turn this off in the app under <b>Settings → Software Info</b>.</li>
+      <li><b>Anonymous usage counts.</b> So that we know how many people use {NAME}, the app (from <a href="changelog.html#v1.0.4">version 1.0.4</a>) sends us a short message when it is first opened, once a day while it is used, and once when the first invoice is created. Each message carries only a random ID made for this purpose (it stays the same on that computer, so one computer is counted once), the app version and the operating system (Windows, macOS or Linux). It never includes your customers, products, invoices, amounts or company details. The messages go to a small server we run on Cloudflare, which does not store IP addresses; Cloudflare’s handling is described in the <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare Privacy Policy</a>. You can turn this off in the app under <b>Settings → Software Info</b>.</li>
       <li><b>Update check.</b> Once a day, when you are online, the app asks GitHub whether a newer version of {NAME} exists; that is an ordinary web request, so GitHub sees your IP address. Apart from this and the usage counts, the app goes online only when you click a link that opens your web browser.</li>
       <li><b>No online account.</b> The app’s usernames and passwords exist only on your computer.</li>
       <li><b>No advertising</b> and no selling of data, ever.</li>
@@ -2184,9 +1643,9 @@ privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {date_tag(RE
     <h2>This website</h2>
     <ul>
       <li><b>Hosting.</b> This site is hosted on GitHub Pages. GitHub may record technical information such as your IP address when you visit, as described in the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener">GitHub Privacy Statement</a>. Installers are downloaded from GitHub as well.</li>
-      <li><b>Fonts.</b> The text font (Manrope), and the poster font (Poppins) on your first visit to the home page, are loaded from Google Fonts, so your browser fetches them from Google’s servers when a page opens. Google’s handling of this is described in the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>.</li>
-      <li><b>Forms.</b> Our support, customization and feedback forms are Google Forms. What you type into them (such as your name, email, phone number and message) is sent to our Google account so that we can reply. Google’s handling of it is described in the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>.</li>
-      <li><b>Analytics.</b> This website uses Google Analytics to count visits and see which pages and download buttons are used. It sets cookies in your browser for this. Google Analytics does not store IP addresses, and we have turned off its advertising features. We use it only to improve the site. You can block these cookies in your browser settings.</li>
+      <li><b>Fonts.</b> The text font (Manrope), the heading font (Fraunces), Noto Sans Tamil or Noto Sans Devanagari on the Tamil and Hindi pages, and the poster font (Poppins) on your first visit to the home page, are hosted on this website. Your browser does not contact Google to load them.</li>
+      <li><b>Forms.</b> Our support, customization and feedback forms are Google Forms. What you type into them (such as your name, email, phone number and message) is sent to our Google account so that we can reply. Google’s handling of it is described in the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>. The customization page can show its form on the page, but only after you press “Show the form on this page”; until then nothing from Google is loaded there.</li>
+      <li><b>Analytics.</b> This website can use Google Analytics to count visits and see which pages and download buttons are used, <b>but only if you press Accept</b> in the cookie box. If you press Decline, or do not answer, no analytics script is loaded and no analytics cookie is set. When you accept, Google Analytics sets cookies in your browser; we have turned off its advertising features, and we use it only to improve the site. You can change your choice at any time with <b>Cookie settings</b> in the footer, and declining removes the analytics cookies. Your choice is remembered in your browser (local storage on this site), which is necessary for the box to work.</li>
       <li><b>Email and WhatsApp.</b> If you contact us, we keep the conversation so that we can help you and follow up.</li>
     </ul>
 
@@ -2214,7 +1673,7 @@ privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {date_tag(RE
 page('privacy.html', 'Privacy policy: business data stays on your PC',
      f'How {BUSINESS} handles information for the {NAME} app and website. Your business data stays on your computer, and '
      'anonymous usage counts can be turned off.',
-     'privacy', privacy_body, crumb='Privacy policy')
+     'privacy', legalize('Privacy policy', 'What the app and this website handle, in plain words.', ['Stays on your PC', 'No ads, ever', 'No account needed'], privacy_body), crumb='Privacy policy')
 
 # ────────────────────────────────── Terms ──────────────────────────────────
 terms_body = page_head('Legal', 'Terms of use', f'Last updated: {date_tag(RELEASE_ISO)}') + f'''
@@ -2260,7 +1719,7 @@ terms_body = page_head('Legal', 'Terms of use', f'Last updated: {date_tag(RELEAS
 page('terms.html', 'Terms of use for the free billing app and website',
      f'Terms for the free {NAME} billing app and this website, and for paid customization from {BUSINESS}: your '
      'data, no warranty, liability and Indian law.',
-     'terms', terms_body, crumb='Terms of use')
+     'terms', legalize('Terms of use', 'The simple rules for using the app and this website.', ['Free for any business', 'Your data, your backups', 'Open source (MIT)'], terms_body), crumb='Terms of use')
 
 # ───────────────────────────────── Licenses ────────────────────────────────
 mit = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'LICENSE'), encoding='utf-8').read().strip()
@@ -2292,8 +1751,8 @@ licenses_body = page_head('Legal', 'Licenses',
     <ul>
       <li><b>Feather icons</b>, released under the MIT License, © 2013–2017 Cole Bemis.</li>
       <li><b>Platform logos</b> (Windows, Apple, Linux) from Simple Icons, released under CC0 1.0. The logos are trademarks of their owners.</li>
-      <li><b>Manrope</b> typeface by Mikhail Sharanda, released under the SIL Open Font License 1.1, served by Google Fonts.</li>
-      <li><b>Poppins</b> typeface by Indian Type Foundry, released under the SIL Open Font License 1.1, served by Google Fonts. It is loaded only for the first-visit poster on the home page.</li>
+      <li><b>Manrope</b> typeface by Mikhail Sharanda, released under the SIL Open Font License 1.1, and hosted on this website.</li>
+      <li><b>Fraunces</b> typeface by Undercase Type, released under the SIL Open Font License 1.1, and hosted on this website. It is used for the headings.</li>\n      <li><b>Noto Sans Tamil</b> and <b>Noto Sans Devanagari</b> typefaces by The Noto Project Authors, released under the SIL Open Font License 1.1, and hosted on this website. They are loaded only on the Tamil and Hindi pages.</li>\n      <li><b>Poppins</b> typeface by Indian Type Foundry, released under the SIL Open Font License 1.1, and hosted on this website. It is loaded only for the first-visit poster on the home page.</li>
     </ul>
     <p>Questions about licences? Write to <a href="mailto:{EMAIL}">{EMAIL}</a>, or see the other ways to <a href="contact.html">contact us</a>.</p>
     </div>
@@ -2303,7 +1762,174 @@ licenses_body = page_head('Legal', 'Licenses',
 page('licenses.html', 'Licenses: MIT License and open-source credits',
      f'Licences for {NAME}: the MIT License of Invoiso by ANOOP P that it is built on, what that licence allows, and credits '
      'for this website’s icons and fonts.',
-     'licenses', licenses_body, crumb='Licenses')
+     'licenses', legalize('Licenses', f'{NAME} is based on Invoiso, whose licence is below. The licences of the open-source packages and fonts built into the app are listed in the app under <b>Settings → Software Info</b>.', ['MIT License', 'Free to use and change', 'Keep the notice'], licenses_body), crumb='Licenses')
+
+# ──────────────────────── How it works (its own page: the five steps, then each step in detail) ────────────────────────
+# Each step: the sub-steps on the left, one screen on the right. The sub-step on show lights up its part of the screen
+# (boxes are x, y, width, height in a 1280 x 800 picture) and the screen changes when the sub-step needs another one.
+HOW_DETAIL = [
+    {'t': 'Set up your business',
+     'lead': 'Do this once. Everything you enter here is printed on your bills, so the first invoice already looks like yours.',
+     'tip': ('Good to know', 'A short first-run guide walks you through company details, invoice settings and the look. Several companies and logins can be added later in Settings.'),
+     'screens': [('company-info', 'Settings → Company Info in Invoiceo: company name, GSTIN, PAN, address, phone, email and website of a sample shop'),
+                 ('settings-invoice', 'Invoiceo Invoice Settings: invoice prefix, leading zeros, currency, date and time format'),
+                 ('settings-pdf', 'The Invoiceo PDF Settings: page size, invoice designs and theme colour with a live preview')],
+     'steps': [('Company details', 'Your name, address, phone, email, website and tax number (the box is labelled GSTIN for India and Tax/VAT No for other countries), in Settings → Company Info.', 0, [[541, 100, 711, 195]]),
+               ('Logo and UPI QR', 'Add your logo, and turn on the UPI QR code so it prints on every invoice. Bank details go in the same place.', 0, [[324, 112, 162, 164], [541, 714, 711, 70]]),
+               ('Invoice settings', 'Choose the invoice prefix, how numbers are padded (00000007 or 7), the currency, the date and time format, and whether tax is on.', 1, [[563, 160, 665, 320]]),
+               ('Design and paper', 'Pick the invoice design and the page size you like. You can change them any time.', 2, [[316, 95, 222, 545]])]},
+    {'t': 'Add customers and products',
+     'lead': 'Add them before you bill, or as you go. Your lists grow with your business.',
+     'tip': ('Good to know', 'Products that are running low or are out of stock are marked on the Products screen, so you can reorder in time.'),
+     'screens': [('customer-new', 'The New Customer form in Invoiceo: name, business name, phone, email, tax number and address'),
+                 ('product-new', 'The Add New Product form in Invoiceo: name, HSN/SAC code, prices, tax and stock'),
+                 ('customers', 'The Invoiceo Customers screen with the Import and Export buttons'),
+                 ('create-invoice', 'The Invoiceo New Invoice screen with its search box for items')],
+     'steps': [('Add a customer', 'Name, business name, phone, email, tax number and address. For a walk-in customer, just type a name while billing.', 0, [[815, 140, 440, 420]]),
+               ('Add products and services', 'Name, HSN/SAC code, selling and buying price, tax rate, stock, unit and expiry date.', 1, [[437, 150, 605, 440]]),
+               ('Import from a file', 'Already have a list? Import customers or products from a CSV file, and export them again any time.', 2, [[745, 8, 196, 42]]),
+               ('Scan barcodes', 'A USB barcode scanner works at the counter: scan, and the item is on the bill.', 3, [[229, 226, 545, 48]])]},
+    {'t': 'Create an invoice',
+     'lead': 'Customer, items and totals on one screen. Tax is worked out as you type.',
+     'tip': ('Good to know', 'A quotation can be turned into an invoice, already filled in, and any bill can be duplicated for a repeat order.'),
+     'screens': [('create-invoice', 'The Invoiceo New Invoice screen with customer Kannan, four items, tax and a total of Rs. 39,023.78')],
+     'steps': [('Pick the customer', 'Choose from your list, or type a walk-in customer’s name.', 0, [[218, 72, 712, 126]]),
+               ('Add items', 'Search by name (Ctrl+F) or scan a barcode. Add a one-off custom item with Ctrl+M.', 0, [[229, 226, 690, 48]]),
+               ('Quantity, price and discount', 'Change them on the line. Tax, extra charges and the total update at once.', 0, [[228, 376, 690, 240]]),
+               ('Type, date and notes', 'Make an invoice, a quotation or a receipt. Set the date, the due date and a note for the customer.', 0, [[943, 72, 318, 380]]),
+               ('Create', 'Press Create (Ctrl+S). Not finished? Save a draft and carry on later.', 0, [[1075, 738, 190, 52], [1118, 626, 142, 100]])]},
+    {'t': 'Print, save or share',
+     'lead': 'The moment an invoice is created, you can look at it, save it or print it.',
+     'tip': ('Good to know', 'Tamil, Hindi and other Indian-language text prints correctly on thermal receipts, the same as on screen.'),
+     'screens': [('invoice-created', 'The Invoiceo Invoice Created Successfully card, with View Details, Preview PDF, Download PDF and Print Invoice'),
+                 ('settings-pdf', 'The Invoiceo PDF Settings: page size, invoice designs and theme colour with a live preview'),
+                 ('company-info', 'Settings → Company Info in Invoiceo, with the Show QR Code on Invoices switch')],
+     'steps': [('Preview, download or print', 'The “created” card has one button for each. Preview the PDF first if you like.', 0, [[480, 458, 520, 84]]),
+               ('Choose a design', 'Several invoice designs, a thermal receipt layout, and your own theme colour and logo.', 1, [[316, 160, 222, 470]]),
+               ('Choose the paper', 'A4, A5, A6, or a 58 mm or 80 mm thermal roll.', 1, [[316, 95, 222, 55]]),
+               ('Add a payment QR', 'Show your UPI QR code on the bill so the customer can pay straight away.', 2, [[541, 714, 711, 70]]),
+               ('Send it', 'Save the PDF and send it to your customer on WhatsApp or email.', 0, [[744, 458, 124, 84]])]},
+    {'t': 'Track payments',
+     'lead': 'Know what you have been paid and who still owes you, without a notebook.',
+     'tip': ('Good to know', 'Reports use the buying price you saved on a product, so profit shows real figures.'),
+     'screens': [('invoices', 'The Invoiceo Invoices list: paid, unpaid and partly paid invoices and the amount outstanding'),
+                 ('customers', 'The Invoiceo Customers screen showing what each customer still owes'),
+                 ('dashboard', 'The Invoiceo dashboard: money collected, money still due, sales by month and invoice status'),
+                 ('reports', 'The Invoiceo Reports screen: total billed, collected, outstanding and a monthly revenue chart')],
+     'steps': [('See every bill’s status', 'The Invoices list shows Paid, Unpaid and Partly paid, and the amount still outstanding.', 0, [[922, 200, 210, 520]]),
+               ('Record a payment', 'Full or part payment, by cash, UPI or bank. Each payment gets its own receipt number.', 0, [[1118, 236, 142, 490]]),
+               ('See who owes you', 'The Customers screen shows what each customer still owes.', 1, [[945, 340, 120, 440]]),
+               ('Check the dashboard', 'Money collected, money still due, sales by month and your latest invoices, at a glance.', 2, [[220, 175, 1038, 115]]),
+               ('Run a report', 'Revenue, receivables, tax, customers, products, a daily report and stock. Export most of them to CSV or PDF.', 3, [[206, 64, 160, 330]])]},
+]
+
+HOW_DAY = [('zap', 'Morning', 'Open Invoiceo. Scan the customer’s items, create the bill and print a thermal receipt at the counter.'),
+           ('file', 'Midday', 'A customer asks for a price. Make a quotation, send the PDF, and turn it into an invoice when they say yes.'),
+           ('credit-card', 'Afternoon', 'A customer pays half now. Record the part payment and the balance is kept for later.'),
+           ('chart', 'Evening', 'Open the dashboard: today’s sales, money still due and items running low.'),
+           ('calendar', 'Month end', 'Run the tax and receivables reports, export them to CSV for your accountant, and make a backup.')]
+
+
+def hd_block(i, d):
+    imgs = ''.join(
+        window_img(shot_file(n, 'en'), alt if k == 0 else alt, 'is-on' if k == 0 else '', lazy=(i > 0 or k > 0))
+        for k, (n, alt) in enumerate(d['screens']))
+    data = json.dumps([{'s': s, 'b': b} for _, _, s, b in d['steps']])
+    items = ''.join(
+        f'<li class="hd-item{" is-on" if k == 0 else ""}" data-k="{k}"><button type="button" class="hd-btn" aria-expanded="{"true" if k == 0 else "false"}">'
+        f'<span class="hd-n">{k + 1}</span><b>{t}</b></button><p class="hd-body">{b}</p></li>'
+        for k, (t, b, _, _) in enumerate(d['steps']))
+    return (f'<article class="hd hd-{i + 1}" id="step-{i + 1}" data-steps="{esc(data)}"><div class="hd-copy">'
+            f'<p class="hd-kicker"><span>{i + 1:02d}</span>Step {i + 1}</p><h3>{d["t"]}</h3><p class="hd-lead">{d["lead"]}</p>'
+            f'<ol class="hd-acc">{items}</ol>'
+            f'<p class="hd-tip">{icon("zap")}<span><b>{d["tip"][0]}.</b> {d["tip"][1]}</span></p></div>'
+            f'<div class="hd-stage"><div class="window hd-win"><div class="window-bar"><i></i><i></i><i></i><span>{NAME}</span></div>'
+            f'<div class="hd-view">{imgs}<span class="hd-spot"></span><span class="hd-spot"></span><span class="hd-pin"></span></div></div></div></article>')
+
+
+def window_img(name, alt, cls='', lazy=True):
+    """One screenshot as a plain <img> (the 1280 px copy, with a content hash in its address), for the step stages."""
+    has_small = small_copy(name)
+    src = asset(f'assets/images/screens/{name}-1280.jpg') if has_small else asset(f'assets/images/screens/{name}.png')
+    load = ' loading="lazy" decoding="async"' if lazy else ''
+    return f'<img class="hd-img {cls}" src="{src}" width="{SHOT_W}" height="{SHOT_H}" alt="{esc(alt)}"{load}>'
+
+
+_hw = TEXT['en']['how']
+_pics = [window(shot_file('company-info', 'en'), _hw['alts'][0], sizes=_HW),
+         window(shot_file('products', 'en'), _hw['alts'][1], sizes=_HW),
+         window(shot_file('create-invoice', 'en'), _hw['alts'][2], sizes=_HW),
+         stage_docs(TEXT['en']['shots']['docs']['invoice-a4'][2], TEXT['en']['shots']['docs']['receipt-80mm'][2]),
+         window(shot_file('invoices', 'en'), _hw['alts'][3], sizes=_HW)]
+how_flow_en = how_flow(section_head('The five steps', 'The whole flow, at a glance', 'Click a step, or scroll, to see its screen.', 'how-title', left=True),
+                       _hw['steps'], _pics, _hw['word'])
+
+how_detail_en = section(
+    section_head('In detail', 'Each step, one screen at a time',
+                 'What to click, what to type and what you get, with the real screens from Invoiceo.', 'hd-title')
+    + '<nav class="hd-strip" aria-label="The five steps">'
+    + ''.join(f'<a href="#step-{i + 1}"><b>{i + 1}</b><span>{d["t"]}</span></a>' for i, d in enumerate(HOW_DETAIL)) + '</nav>'
+    + ''.join(hd_block(i, d) for i, d in enumerate(HOW_DETAIL)),
+    'details', 'hd-section', 'hd-title')
+
+how_day_en = section(
+    section_head('A day in the shop', 'What a normal day looks like',
+                 'The same five steps, repeated: bill, get paid, check, back up.', 'day-title')
+    + '<ol class="day mt-4">' + ''.join(
+        f'<li class="day-{i + 1}"><span class="day-ic">{icon(ic)}</span><p class="day-t">{t}</p><p>{b}</p></li>'
+        for i, (ic, t, b) in enumerate(HOW_DAY)) + '</ol>',
+    'a-day', 'section-subtle', 'day-title')
+
+how_data_en = section(
+    '<div class="data-grid"><div class="data-copy">'
+    + section_head('Your data', 'Safe on your computer, easy to move', 'There is no cloud and no account. Your records live on your computer, and you decide when to copy them.', 'data-title', left=True)
+    + '<ul class="data-list">'
+      f'<li>{tile("hard-drive", "teal", "sm")}<div><b>Stored on your computer</b><span>Customers, products, invoices and payments never leave it.</span></div></li>'
+      f'<li>{tile("refresh", "teal", "sm")}<div><b>Automatic backup</b><span>Turn it on in Settings → Backup, and a copy is saved while the app is open.</span></div></li>'
+      f'<li>{tile("download", "teal", "sm")}<div><b>Back up now, or export</b><span>Make a backup whenever you like, or export your data as JSON.</span></div></li>'
+      f'<li>{tile("laptop", "teal", "sm")}<div><b>Move to a new computer</b><span>Install Invoiceo there, choose Import / restore and pick your backup.</span></div></li>'
+      '</ul></div>'
+    + f'<div class="data-pic">{window(shot_file("settings-backup", "en"), "The Invoiceo Backup settings: automatic backup, create a backup, export as JSON and import or restore", sizes="(max-width: 900px) 100vw, 600px")}'
+    '<div class="data-flow" aria-hidden="true"><span><b>Your computer</b>Invoiceo data</span><i></i><span><b>Backup file</b>a folder you choose</span><i></i><span><b>New computer</b>restore from the backup</span></div></div></div>',
+    'your-data', '', 'data-title')
+
+how_install_en = section(
+    section_head('Before you install', 'What you need', 'Very little.', 'need-title')
+    + '<div class="grid-auto mt-4">'
+    + f'<div class="card">{tile("monitor")}<h3>A computer</h3><p>Windows 10 or 11 (64-bit), macOS 12 or later, or Linux (a .deb package or an AppImage). Invoiceo is a desktop app; it is not for phones.</p></div>'
+    + f'<div class="card">{tile("wifi-off")}<h3>No internet, no account</h3><p>You need the internet only to download it. Billing, printing and reports all work offline, and there is nothing to sign up for.</p></div>'
+    + f'<div class="card">{tile("shield")}<h3>A moment on Windows</h3><p>Windows may ask before it opens the installer, because it is not code-signed yet. The <a href="download.html">Download page</a> shows the two clicks, with pictures.</p></div>'
+    + '</div>',
+    'need', 'section-subtle', 'need-title')
+
+how_cta_en = f"""<section class="cta-section" aria-labelledby="cta-title">
+  <div class="wrap">
+    <div class="cta-band">
+      <h2 id="cta-title">Ready to try it?</h2>
+      <p class="lead">Download Invoiceo, set up your business in a few minutes and make your first invoice today. It is free.</p>
+      <div class="cta-row">
+        {btn('Download free', 'download.html', 'inverse', 'lg', 'download')}
+        {btn('Read the FAQ', 'faq.html', 'on-dark', 'lg', 'help')}
+      </div>
+      <p class="cta-meta">Version {VERSION} · Windows, macOS and Linux</p>
+      {checks(['Free forever', 'No invoice limit', 'Works offline', 'No sign-up'], 'checks-inline')}
+    </div>
+  </div>
+</section>"""
+
+how_ld = {'@context': 'https://schema.org', '@type': 'HowTo', 'name': f'How to make an invoice with {NAME}',
+          'description': f'{NAME} in five steps: set up your business, add customers and products, create an invoice, print or save it, and track payments.',
+          'step': [{'@type': 'HowToStep', 'position': i + 1, 'name': d['t'], 'url': f'{SITE}/how-it-works.html#step-{i + 1}',
+                    'text': d['lead'] + ' ' + ' '.join(f'{a}: {b}' for a, b, _, _ in d['steps'])} for i, d in enumerate(HOW_DETAIL)]}
+
+how_body = (page_head('How it works', f'How {NAME} works, step by step',
+                      'From the first setup to the last payment: what you do in each step, with the real screens.')
+            + '\n\n' + how_flow_en + '\n\n' + how_detail_en + '\n\n' + how_day_en + '\n\n' + how_data_en + '\n\n' + how_install_en + '\n\n' + how_cta_en)
+
+page('how-it-works.html', f'How {NAME} works: from setup to payment in five steps',
+     f'See how {NAME} works, step by step: set up your business, add customers and products, create an invoice, print or save it and track payments, with the real screens.',
+     'how', how_body, jsonld=how_ld, crumb='How it works')
+
 
 # ─────────────────────────────────── 404 ───────────────────────────────────
 nf_body = f'''<section class="wrap not-found">
@@ -2321,7 +1947,7 @@ page('404.html', 'Page not found', f'This page could not be found on the {NAME} 
 print('pages written')
 
 # ───────────────────────── sitemap / robots / llms / manifest ──────────────
-pages = ['', 'ta.html', 'hi.html', 'download.html', 'compare.html', 'customization.html', 'reviews.html', 'faq.html', 'changelog.html', 'contact.html',
+pages = ['', 'ta.html', 'hi.html', 'how-it-works.html', 'download.html', 'compare.html', 'customization.html', 'reviews.html', 'faq.html', 'changelog.html', 'contact.html',
          'privacy.html', 'terms.html', 'licenses.html']
 with open(os.path.join(OUT, 'sitemap.xml'), 'w') as f:
     f.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n')
@@ -2335,7 +1961,7 @@ with open(os.path.join(OUT, 'robots.txt'), 'w') as f:
 with open(os.path.join(OUT, 'llms.txt'), 'w') as f:
     f.write(f'''# {NAME}
 
-> {NAME} is free, open-source (MIT) offline billing and GST invoice software for Windows, macOS and Linux, made by {BUSINESS} (India). It creates invoices, quotations and payment receipts, prints on A4/A5/A6 paper or 58/80 mm thermal printers, and works in English, Tamil, Hindi, Nepali, French, Spanish, Chinese and Tibetan (partly translated). All business data is stored on the user's own computer. The app is free with no subscription; custom features are a paid service quoted per request.
+> {NAME} is free, open-source (MIT) offline invoicing software for Windows, macOS and Linux, made by {BUSINESS} (India). It works in any country: set your own tax rates (GST, VAT or sales tax) and choose any currency. It creates invoices, quotations and payment receipts, prints on A4/A5/A6 paper or 58/80 mm thermal printers, and works in English, Tamil, Hindi, Nepali, French, Spanish, Chinese and Tibetan (partly translated). All business data is stored on the user's own computer. The app is free with no subscription; custom features are a paid service quoted per request.
 
 ## Full text
 
@@ -2347,6 +1973,7 @@ with open(os.path.join(OUT, 'llms.txt'), 'w') as f:
 - [Home in Tamil]({SITE}/ta.html): the same page in Tamil (தமிழ்)
 - [Home in Hindi]({SITE}/hi.html): the same page in Hindi (हिन्दी)
 - [Download]({SITE}/download.html): installers for Windows, macOS and Linux, with install steps
+- [How it works]({SITE}/how-it-works.html): the five steps from setup to payment, with each step explained
 - [Compare]({SITE}/compare.html): Invoiceo next to Vyapar, myBillBook, Tally and Sleek Bill, checked {COMPARE_CHECKED}
 - [Customization]({SITE}/customization.html): paid custom features, quoted per request
 - [Reviews]({SITE}/reviews.html): what customers say, and recent custom work
@@ -2408,7 +2035,7 @@ def first(pattern, text):
 
 full = [f'# {NAME}: full description',
         '',
-        f'> {NAME} is free, open-source (MIT) offline billing and GST invoice software for Windows, macOS and Linux, made by '
+        f'> {NAME} is free, open-source (MIT) offline invoicing software for Windows, macOS and Linux (works in any country, with your own tax rates and currency), made by '
         f'{BUSINESS} (India). This file collects the main text of {SITE}/ in one place, for AI assistants and other readers.',
         '',
         f'- Current version: {VERSION}, released {RELEASE_DATE} ({RELEASE_ISO})',
@@ -2419,21 +2046,21 @@ full = [f'# {NAME}: full description',
         '',
         f'## What {NAME} is',
         '',
-        first(r'<h1[^>]*>(.*?)</h1>', hero) + '. ' + first(r'<p class="lead">(.*?)</p>', hero),
+        first(r'<h1[^>]*>(.*?)</h1>', EN_HOME['hero']) + '. ' + first(r'<p class="lead">(.*?)</p>', EN_HOME['hero']),
         '',
         f'## Why {NAME}',
         '']
-full += [f'- **{md(t)}**: {md(d)}' for _, t, d in WHY]
+full += [f'- **{md(t)}**: {md(d)}' for _, t, d in EN['why']['cards']]
 full += ['', '## How it works', '']
-full += [f'{int(n)}. **{md(t)}**: {md(b)}' for n, t, b in HOW]
+full += [f'{int(n)}. **{md(t)}**: {md(b)}' for n, t, b in EN['how']['steps']]
 full += ['', '## Features', '']
-for _, t, items, _ in GROUPS:
+for _, t, items, _ in EN['features']['groups']:
     full += [f'### {md(t)}', ''] + [f'- {md(i)}' for i in items] + ['']
 full += ['## Who it is for', '']
-full += [f'- **{md(t)}**: {md(d)}' for _, t, d in WHO]
-full += ['', '## Made for India, works anywhere', ''] + [f'- {md(i)}' for i in INDIA + WORLD]
+full += [f'- **{md(t)}**: {md(d)}' for _, t, d in EN['who']['items']]
+full += ['', '## Local billing rules, works anywhere', ''] + [f'- {md(i)}' for c in EN['lang_section']['cards'] for i in c['items']]
 full += ['', 'App languages: English, Tamil, Hindi, Nepali, French, Spanish, Chinese and Tibetan (partly translated).']
-full += ['', '## Screens', ''] + [f'- **{md(t)}**: {md(c)}' for _, t, c in screen_cards]
+full += ['', '## Screens', ''] + [f'- **{md(EN['shots']['screens'][n][0])}**: {md(EN['shots']['screens'][n][1])}' for n in screen_cards]
 full += ['', '## Download and install', '',
          f'Download page: {SITE}/download.html. Every installer is free, with no sign-up, no licence key and no subscription. '
          f'SHA-256 checksums are linked on the download page.', '']
@@ -2441,7 +2068,7 @@ for p in PLATFORMS:
     full += [f'### {p["name"]}', '', f'- Requirements: {md(p["req"])}',
              '- Files: ' + ', '.join(f for _, f in p['files']) + f' ({SITE}/download.html#{p["anchor"]})', '- Steps:']
     full += [f'  {i + 1}. {md(st)}' for i, st in enumerate(p['steps'])] + ['']
-full += ['### First steps', ''] + [f'{i + 1}. **{t}**: {md(b)}' for i, (_, t, b) in enumerate(FIRST_STEPS)]
+full += ['### First steps', ''] + [f'{i + 1}. **{t}**: {md(b)}' for i, (_, t, b) in enumerate(EN['download']['first_steps'])]
 full += ['', '### Updating to a new version', '', first(r'Updating to a new version</h2><p>(.*?)</p>', download_body)]
 full += ['', f'## How {NAME} compares ({SITE}/compare.html)', '',
          f'Checked on {COMPARE_CHECKED} from each company’s own website. "Not listed" means their page did not say. Plans and limits change.', '']
@@ -2454,7 +2081,7 @@ for t, items in FAQ_GROUPS:
     full += [f'### {md(t)}', '']
     for q, a in items:
         full += [f'**{md(q)}**', '', ' '.join(md(x) for x in (a if isinstance(a, list) else [a])), '']
-full += ['## Privacy', '', first(r'<p class="lead">(.*?)</p>', privacy), '',
+full += ['## Privacy', '', f'{NAME} keeps your business data on your computer. Nothing about your customers, prices or sales is sent to us or anyone else.', '',
          f'Summary of the privacy policy ({SITE}/privacy.html):', '']
 for h, ul in re.findall(r'<h2>(.*?)</h2>\s*<ul>(.*?)</ul>', privacy_body, re.S):
     full += [f'### {md(h)}', ''] + [f'- {md(li)}' for li in re.findall(r'<li>(.*?)</li>', ul, re.S)] + ['']
