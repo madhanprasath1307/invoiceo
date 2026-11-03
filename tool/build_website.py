@@ -32,7 +32,11 @@ RELEASE_ISO = '2026-10-28'
 # page content changes between app releases; pages use the later of this and
 # RELEASE_ISO as their dateModified and sitemap <lastmod>. PAGE_UPDATED can give
 # a single page its own date. Privacy/terms keep their policy date (RELEASE_ISO).
-SITE_UPDATED_ISO = '2026-10-31'
+SITE_UPDATED_ISO = '2026-11-03'
+# The cookie box (Google Analytics only after Accept, a "Cookie settings" footer link and the matching Privacy wording).
+# The code stays in site.js. False = analytics runs for everyone, as before, and no box is shown. Set True to bring the box back,
+# then rebuild: this switches the box, the footer link and the Privacy text together. (Visitors from the EU/UK should be asked.)
+CONSENT_BANNER = False
 PAGE_UPDATED = {}
 PAGE_MODIFIED = {}  # filled by page(): filename -> dateModified, reused by the sitemap
 COFFEE = 'https://buymeacoffee.com/madcreations'
@@ -389,7 +393,7 @@ def footer(home=False, lang='en'):
     F = TEXT[lang]['footer']
     col = lambda title, items: (f'<div><h2>{title}</h2><ul>' + ''.join(f'<li{" data-block" if "data-" in a else ""}><a {a}>{t}</a></li>' for t, a in items)
                                 + '</ul></div>')
-    cols = [(title, [(t, a.replace('{pre}', pre)) for t, a in items]) for title, items in F['cols']]
+    cols = [(title, [(t, a.replace('{pre}', pre)) for t, a in items if CONSENT_BANNER or 'data-cookie-settings' not in a]) for title, items in F['cols']]
     # the Languages column lists every home page, from the registry
     cols.append((F['lang_title'], [(TEXT[c]['shell']['switch']['label'], f'href="{HOME_HREF[c]}" hreflang="{c}" lang="{c}"') for c in HOME_LANGS]))
     tagline, coffee, foot_dl, foot_top, credit = F['tagline'], F['coffee'], F['foot_dl'], F['foot_top'], F['credit']
@@ -413,6 +417,95 @@ def footer(home=False, lang='en'):
   </div>
   <div class="foot-mark" aria-hidden="true">{NAME}</div>
 </footer>'''
+
+
+
+# ───────────── Smaller pictures (AVIF) and unique alt text, applied to every finished page ─────────────
+_AVIF_TOOL = os.path.join('/tmp', 'invoiceo-toavif')
+_AVIF_OK = None
+
+
+def _avif_ready():
+    """Compiles tool/toavif.swift once (macOS ImageIO writes AVIF). Without it the pages simply keep their JPEG/PNG pictures."""
+    global _AVIF_OK
+    if _AVIF_OK is None:
+        src = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'toavif.swift')
+        try:
+            if not os.path.exists(_AVIF_TOOL) or os.path.getmtime(_AVIF_TOOL) < os.path.getmtime(src):
+                subprocess.run(['swiftc', '-O', src, '-o', _AVIF_TOOL], check=True, capture_output=True)
+            _AVIF_OK = True
+        except (OSError, subprocess.CalledProcessError):
+            _AVIF_OK = False
+    return _AVIF_OK
+
+
+def avif_copy(rel):
+    """assets/images/... .png|.jpg -> .avif next to it (quality 0.7), rebuilt only when the original is newer. Returns the .avif path or None."""
+    src = os.path.join(OUT, rel)
+    dst = os.path.splitext(src)[0] + '.avif'
+    if not os.path.exists(src):
+        return None
+    if not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(src):
+        if not _avif_ready():
+            return None
+        try:
+            subprocess.run([_AVIF_TOOL, '0.7', src], check=True, capture_output=True)
+        except (OSError, subprocess.CalledProcessError):
+            return None
+    return os.path.splitext(rel)[0] + '.avif' if os.path.exists(dst) else None
+
+
+_IMG = re.compile(r'<img\b[^>]*>')
+_ATTR = lambda tag, name: (re.search(r'\s' + name + r'="([^"]*)"', tag) or [None, None])[1]
+ALT_SEEN = set()
+_ALT_CTX = [('class="hero', 'the hero walkthrough'), ('id="how-it-works"', 'the five-step guide'), ('id="screenshots"', 'the screens gallery'),
+            ('id="details"', 'the detailed guide'), ('id="your-data"', 'the backup section'), ('id="features"', 'the features section')]
+
+
+def pictures_and_alts(doc):
+    """AVIF <source> for each local screenshot or logo, and an alt text that is never the same as one already used on another picture."""
+    out, last, n = [], 0, 0
+    for m in _IMG.finditer(doc):
+        tag = m.group(0)
+        out.append(doc[last:m.start()])
+        last = m.end()
+        # a different alt when the same words were already used (another page, or another place on this page)
+        alt = _ATTR(tag, 'alt')
+        if alt:
+            if alt in ALT_SEEN:
+                before = doc[:m.start()]
+                label = next((l for k, l in sorted(((before.rfind(k), l) for k, l in _ALT_CTX), reverse=True) if k >= 0), None) or 'another view'
+                new, i = f'{html.unescape(alt)} ({label})', 2
+                while esc(new) in ALT_SEEN:
+                    new, i = f'{html.unescape(alt)} ({label}, view {i})', i + 1
+                tag = tag.replace(f'alt="{alt}"', f'alt="{esc(new)}"', 1)
+                alt = esc(new)
+            ALT_SEEN.add(alt)
+        # AVIF versions
+        src, srcset, sizes = _ATTR(tag, 'src'), _ATTR(tag, 'srcset'), _ATTR(tag, 'sizes')
+        def to_avif(u):
+            path, _, q = u.partition('?')
+            if not path.startswith('assets/images/') or not path.endswith(('.png', '.jpg')) or path.endswith(('icon-192.png', 'icon-512.png', 'favicon-32.png', 'apple-touch-icon.png', 'og-image.png')):
+                return None
+            a = avif_copy(path)
+            return asset(a) if a else None
+        if src and 'data:' not in src:
+            parts = [x.strip() for x in (srcset or src).split(',')]
+            conv = []
+            for part in parts:
+                u, _, desc = part.partition(' ')
+                v = to_avif(u)
+                if v is None:
+                    conv = None
+                    break
+                conv.append(f'{v} {desc}'.strip())
+            if conv:
+                so = f'<source type="image/avif" srcset="{", ".join(conv)}"' + (f' sizes="{sizes}"' if sizes and srcset else '') + '>'
+                tag = f'<picture>{so}{tag}</picture>'
+                n += 1
+        out.append(tag)
+    out.append(doc[last:])
+    return ''.join(out)
 
 
 def page(filename, title, description, active, body, jsonld=None, noindex=False, lang='en', crumb=None, page_type='WebPage'):
@@ -481,7 +574,7 @@ def page(filename, title, description, active, body, jsonld=None, noindex=False,
   {FONT_LINKS[TEXT[lang]['shell']['fonts']]}
   <link rel="stylesheet" href="{asset('assets/css/site.css')}">{ld}
 </head>
-<body>
+<body data-consent="{'on' if CONSENT_BANNER else 'off'}">
 {header(active, home=home, base=noindex, lang=lang)}
 <main id="main">
 {body}
@@ -492,6 +585,7 @@ def page(filename, title, description, active, body, jsonld=None, noindex=False,
 </body>
 </html>
 '''
+    doc = pictures_and_alts(doc)
     with open(os.path.join(OUT, filename), 'w', encoding='utf-8') as f:
         f.write(doc)
 
@@ -502,17 +596,36 @@ def page_head(eyebrow, title, lead=None, extra=''):
             f'    {lead_html}{extra}\n  </div>\n</section>')
 
 
+def byline(iso=None):
+    """A visible author line for content pages: written by the business, with the date of the last update."""
+    iso = iso or SITE_UPDATED_ISO
+    return (f'<p class="byline">By <a rel="author" href="about.html">{BUSINESS}</a> · Last updated '
+            f'<time datetime="{iso}">{int(iso[8:])} {MONTHS[int(iso[5:7]) - 1]} {iso[:4]}</time></p>')
+
+
 ORG_ID = SITE + '/#organization'
 SOFTWARE_ID = SITE + '/#software'
 ORG_REF = {'@type': 'Organization', '@id': ORG_ID, 'name': BUSINESS, 'url': SITE + '/'}
-# Only facts the site already shows. No sameAs: the owner has given no social profiles.
+# Only facts the site already shows. sameAs: the business's own Buy Me a Coffee page (the only public profile the site links).
 ORG = {'@type': 'Organization', '@id': ORG_ID, 'name': BUSINESS, 'email': EMAIL, 'url': SITE + '/',
        'logo': {'@type': 'ImageObject', 'url': SITE + '/assets/images/icon-512.png', 'width': 512, 'height': 512},
        'description': f'{BUSINESS} makes {NAME}, free and open-source billing software, and builds paid custom features '
                       'for businesses on request.',
+       'sameAs': ['https://buymeacoffee.com/madcreations'],
+       'knowsLanguage': ['en', 'ta', 'hi'],
        'address': {'@type': 'PostalAddress', 'addressCountry': 'IN'},
        'contactPoint': {'@type': 'ContactPoint', 'contactType': 'customer support', 'email': EMAIL,
                         'url': SITE + '/contact.html'}}
+def nav_ld(lang):
+    """The main menu as SiteNavigationElement entries (names and addresses exactly as in the header)."""
+    items = []
+    for text, href, _key in TEXT[lang]['header']['links']:
+        href = href.replace('{pre}', '')
+        url = SITE + '/' + (HOMES[lang] if href.startswith('#') and lang != 'en' else '') + (href if href.startswith('#') else href.lstrip('/'))
+        items.append({'@type': 'SiteNavigationElement', 'name': html.unescape(text), 'url': url})
+    return {'@context': 'https://schema.org', '@graph': items}
+
+
 # The app's own languages (English, Tamil, Hindi, Nepali, French, Spanish, Chinese, Tibetan).
 APP_LANGS = ['en', 'ta', 'hi', 'ne', 'fr', 'es', 'zh', 'bo']
 WEBSITE_LD = {'@context': 'https://schema.org', '@type': 'WebSite', '@id': SITE + '/#website', 'name': NAME,
@@ -907,7 +1020,7 @@ for _lang in HOME_LANGS:
          '\n\n'.join(_sec[k] for k in HOME_ORDER if k in _sec),
          lang=_lang,
          jsonld=[software_ld(_T['page']['jsonld_description'], _T['features']['groups'], lambda n, _l=_lang: shot_file(n, _l)),
-                 WEBSITE_LD])
+                 WEBSITE_LD, nav_ld(_lang)])
 
 # ──────────────────────────────── Download ─────────────────────────────────
 
@@ -967,8 +1080,8 @@ WINDOWS_GUIDE = f"""<section class="section section-subtle" id="windows-warning"
 """
 
 download_body = page_head(
-    'Download', f'Download {NAME}', 'Free for Windows, macOS and Linux. No sign-up, no licence key and no subscription.',
-    f'\n    <div class="badges">{badge("Version <span data-version>" + VERSION + "</span>", "brand")}'
+    'Download', f'Download {NAME}', 'Free for Windows, macOS and Linux. No sign-up, no licence key and no subscription. New here? <a href="how-it-works.html">See how it works</a>.',
+    f'\n    {byline()}<div class="badges">{badge("Version <span data-version>" + VERSION + "</span>", "brand")}'
     f'{badge("Released <span data-release-date>" + RELEASE_DATE + "</span>", "neutral")}</div>'
     f'\n    <p class="small"><a href="changelog.html">What’s new in this version</a></p>') + f'''
 
@@ -1055,7 +1168,7 @@ recent_work_2 = f'''<section class="section section-subtle" id="work-sales-purch
 
 customization_body = page_head(
     'Custom features', 'Customization',
-    f'{NAME} is free to use. When your business needs something more, we can build it for you. Every request is quoted on its own, and you decide before any work starts.') + f'''
+    f'{NAME} is free to use. When your business needs something more, we can build it for you. Every request is quoted on its own, and you decide before any work starts. See <a href="reviews.html">a custom bill we built</a>.', byline()) + f'''
 
 <section class="page-body" aria-labelledby="what-title">
   <div class="wrap">
@@ -1101,7 +1214,7 @@ FAQ_GROUPS = [
          ['Yes. The app and its updates are free, with no subscription and no trial period. You can install it on as many of your computers as you like.',
           'We only charge for work done for you on request, such as a new bill format or a report. See <a href="customization.html">Customization</a>.']),
         ('Is Invoiceo open source?',
-         f'Yes. {NAME} is released under the MIT License, so anyone can read, use and change the code. It is based on Invoiso by ANOOP P, which is also MIT-licensed.'),
+         f'Yes. {NAME} is released under the MIT License, so anyone can read, use and change the code. It is based on Invoiso by ANOOP P, which is also MIT-licensed. See <a href="about.html">about {NAME}</a> and <a href="licenses.html">the licences</a>.'),
         ('How can it be free?',
          f'There is no paid version. Development is supported by optional <a href="customization.html">paid customization</a> for businesses that need something special, and by <a href="{COFFEE}" target="_blank" rel="noopener">donations</a>.'),
         ('Do I need an internet connection?',
@@ -1172,14 +1285,14 @@ FAQ_GROUPS = [
 FAQ = [qa for _, items in FAQ_GROUPS for qa in items]
 
 
-faq_body = page_head('Help', 'Frequently asked questions', f'Short answers about {NAME}. Can’t find yours? <a href="contact.html">Ask us</a>.') + '\n\n<section class="page-body">\n  <div class="wrap measure">\n' + '\n'.join(
+faq_body = page_head('Help', 'Frequently asked questions', f'Short answers about {NAME}. Can’t find yours? <a href="contact.html">Ask us</a>.', byline()) + '\n\n<section class="page-body">\n  <div class="wrap measure">\n' + '\n'.join(
     f'    <h2 class="h3{" mt-4" if i else ""}" id="{strip_tags(t).lower().replace(" ", "-")}">{t}</h2>\n    <div class="faq-list mt-2">'
     + ''.join(faq_item(q, a) for q, a in items) + '</div>'
     for i, (t, items) in enumerate(FAQ_GROUPS)) + '\n  </div>\n</section>'
 
 # ───────────────────────────────── Reviews ─────────────────────────────────
 reviews_body = page_head('Reviews', 'What our customers say',
-                         f'Businesses that use {NAME}, in words they have approved.') + f'''
+                         f'Businesses that use {NAME}, in words they have approved. Want something built for your business? <a href="customization.html">Ask about customization</a>.', byline()) + f'''
 
 <section class="page-body" aria-labelledby="rv-work">
   <div class="wrap">
@@ -1262,7 +1375,7 @@ page('reviews.html', 'Customer reviews and custom billing work',
      'sales-and-purchase bill for a farm shop.',
      'reviews', reviews_body, crumb='Customer reviews')
 
-page('faq.html', 'FAQ: free offline invoicing software',
+page('faq.html', 'FAQ: free offline invoicing and billing software',
      f'Answers about {NAME}: price, open source, offline use, where data is stored, taxes and currencies, printers, languages, barcode scanners, installing and updating.',
      'faq', faq_body, crumb='FAQ', jsonld={
          '@context': 'https://schema.org',
@@ -1357,7 +1470,7 @@ glance = ('<div class="facts-strip compare-glance"><ul class="wrap facts facts-4
           + '</ul></div>')
 compare_body = page_head('Compare', f'{NAME} compared with Vyapar, myBillBook, Tally and Sleek Bill',
                          f'A plain side-by-side look at free billing software popular with small businesses in India. Checked on {COMPARE_CHECKED} from each company’s own website.',
-                         extra=f'<div class="badges mt-2">{badge("Free forever", "teal", "gift")}{badge("Works offline", "brand", "wifi-off")}{badge("Open source", "neutral", "code")}</div>') + glance + f'''
+                         extra=byline() + f'<div class="badges mt-2">{badge("Free forever", "teal", "gift")}{badge("Works offline", "brand", "wifi-off")}{badge("Open source", "neutral", "code")}</div>') + glance + f'''
 
 <section class="page-body">
   <div class="wrap">
@@ -1369,7 +1482,7 @@ compare_body = page_head('Compare', f'{NAME} compared with Vyapar, myBillBook, T
     </div>
     <ul class="cmp-legend"><li><span class="ck ck-y"></span>Included</li><li><span class="ck ck-p"></span>Partly, or with limits</li>
       <li><span class="ck ck-n"></span>Not available</li><li><span class="ck ck-x"></span>Not listed on their page</li></ul>
-    <p class="small mt-2">Checked on {COMPARE_CHECKED} from the home or pricing pages linked above. Plans, limits and prices change, so please check
+    <p class="small mt-2">What {NAME} does not do yet is listed in the <a href="faq.html#limits-and-what-is-not-built-in">FAQ</a>, and the <a href="how-it-works.html">How it works</a> page shows what it does. Checked on {COMPARE_CHECKED} from the home or pricing pages linked above. Plans, limits and prices change, so please check
       their websites before you decide. “Not listed” means that page did not say. All product names belong to their owners;
       {NAME} is not connected to them.</p>
   </div>
@@ -1383,7 +1496,7 @@ compare_body = page_head('Compare', f'{NAME} compared with Vyapar, myBillBook, T
       <div class="group-card"><div class="group-card-head">{tile("help", "neutral")}<h3>Choose another if…</h3></div><ul class="plain-list">{"".join(f"<li>{i}</li>" for i in PICK_OTHER)}</ul></div>
     </div>
     <div class="stack mt-4" style="align-items: center; text-align: center; gap: 14px">
-      <p>Missing something? {NAME} is free, and features such as the ones above can be built for your business as a paid service, quoted per request.</p>
+      <p>Missing something? {NAME} is free, and features such as the ones above can be built for your business as a <a href="customization.html">paid service</a>, quoted per request.</p>
       <div class="cta-row" style="justify-content: center">
         {btn(f'Download {NAME} free', 'download.html', 'primary', 'lg', 'download')}
         {btn('Ask about a customization', 'customization.html', 'secondary', 'lg', 'arrow')}
@@ -1405,7 +1518,7 @@ compare_body = page_head('Compare', f'{NAME} compared with Vyapar, myBillBook, T
   </div>
 </section>'''
 
-page('compare.html', f'{NAME} compared with Vyapar, myBillBook, Tally and Sleek Bill',
+page('compare.html', f'{NAME} vs Vyapar, myBillBook, Tally and Sleek Bill compared',
      f'Free billing software compared: {NAME} against Vyapar, myBillBook, Tally and Sleek Bill on free-plan limits, offline use, '
      f'sign-up, open source, GST returns and more. Checked {COMPARE_CHECKED}.',
      'compare', compare_body, crumb='Compare')
@@ -1425,7 +1538,7 @@ contact_cards = [
     ('coffee', 'note', f'Like {NAME}?', f'<p>{NAME} is free. If it saves you time, you can buy me a coffee.</p>',
      btn('Buy me a coffee', COFFEE, 'secondary', attrs=NEW_TAB), ''),
 ]
-contact_body = page_head('Contact', 'Talk to us', 'Questions, problems or ideas — choose whichever way suits you.') + f'''
+contact_body = page_head('Contact', 'Talk to us', 'Questions, problems or ideas — choose whichever way suits you. Many answers are already in the <a href="faq.html">FAQ</a>.') + f'''
 
 <section class="page-body">
   <div class="wrap">
@@ -1622,6 +1735,7 @@ def legalize(title, lead, chips, body):
 </section>''')
 
 # ───────────────────────────────── Privacy ─────────────────────────────────
+ANALYTICS_BULLET = ('''<li><b>Analytics.</b> This website can use Google Analytics to count visits and see which pages and download buttons are used, <b>but only if you press Accept</b> in the cookie box. If you press Decline, or do not answer, no analytics script is loaded and no analytics cookie is set. When you accept, Google Analytics sets cookies in your browser; we have turned off its advertising features, and we use it only to improve the site. You can change your choice at any time with <b>Cookie settings</b> in the footer, and declining removes the analytics cookies. Your choice is remembered in your browser (local storage on this site), which is necessary for the box to work.</li>''' if CONSENT_BANNER else '''<li><b>Analytics.</b> This website uses Google Analytics to count visits and see which pages and download buttons are used. It sets cookies in your browser for this. Google Analytics does not store IP addresses, and we have turned off its advertising features. We use it only to improve the site. You can block these cookies in your browser settings.</li>''')
 privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {date_tag(RELEASE_ISO)}') + f'''
 
 <section class="page-body">
@@ -1643,9 +1757,9 @@ privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {date_tag(RE
     <h2>This website</h2>
     <ul>
       <li><b>Hosting.</b> This site is hosted on GitHub Pages. GitHub may record technical information such as your IP address when you visit, as described in the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener">GitHub Privacy Statement</a>. Installers are downloaded from GitHub as well.</li>
-      <li><b>Fonts.</b> The text font (Manrope), the heading font (Fraunces), Noto Sans Tamil or Noto Sans Devanagari on the Tamil and Hindi pages, and the poster font (Poppins) on your first visit to the home page, are hosted on this website. Your browser does not contact Google to load them.</li>
+      <li><b>Fonts.</b> The text font (Manrope), the heading font (Fraunces), and Noto Sans Tamil or Noto Sans Devanagari on the Tamil and Hindi pages, are hosted on this website. Your browser does not contact Google to load them.</li>
       <li><b>Forms.</b> Our support, customization and feedback forms are Google Forms. What you type into them (such as your name, email, phone number and message) is sent to our Google account so that we can reply. Google’s handling of it is described in the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>. The customization page can show its form on the page, but only after you press “Show the form on this page”; until then nothing from Google is loaded there.</li>
-      <li><b>Analytics.</b> This website can use Google Analytics to count visits and see which pages and download buttons are used, <b>but only if you press Accept</b> in the cookie box. If you press Decline, or do not answer, no analytics script is loaded and no analytics cookie is set. When you accept, Google Analytics sets cookies in your browser; we have turned off its advertising features, and we use it only to improve the site. You can change your choice at any time with <b>Cookie settings</b> in the footer, and declining removes the analytics cookies. Your choice is remembered in your browser (local storage on this site), which is necessary for the box to work.</li>
+      {ANALYTICS_BULLET}
       <li><b>Email and WhatsApp.</b> If you contact us, we keep the conversation so that we can help you and follow up.</li>
     </ul>
 
@@ -1752,7 +1866,7 @@ licenses_body = page_head('Legal', 'Licenses',
       <li><b>Feather icons</b>, released under the MIT License, © 2013–2017 Cole Bemis.</li>
       <li><b>Platform logos</b> (Windows, Apple, Linux) from Simple Icons, released under CC0 1.0. The logos are trademarks of their owners.</li>
       <li><b>Manrope</b> typeface by Mikhail Sharanda, released under the SIL Open Font License 1.1, and hosted on this website.</li>
-      <li><b>Fraunces</b> typeface by Undercase Type, released under the SIL Open Font License 1.1, and hosted on this website. It is used for the headings.</li>\n      <li><b>Noto Sans Tamil</b> and <b>Noto Sans Devanagari</b> typefaces by The Noto Project Authors, released under the SIL Open Font License 1.1, and hosted on this website. They are loaded only on the Tamil and Hindi pages.</li>\n      <li><b>Poppins</b> typeface by Indian Type Foundry, released under the SIL Open Font License 1.1, and hosted on this website. It is loaded only for the first-visit poster on the home page.</li>
+      <li><b>Fraunces</b> typeface by Undercase Type, released under the SIL Open Font License 1.1, and hosted on this website. It is used for the headings.</li>\n      <li><b>Noto Sans Tamil</b> and <b>Noto Sans Devanagari</b> typefaces by The Noto Project Authors, released under the SIL Open Font License 1.1, and hosted on this website. They are loaded only on the Tamil and Hindi pages.</li>\n
     </ul>
     <p>Questions about licences? Write to <a href="mailto:{EMAIL}">{EMAIL}</a>, or see the other ways to <a href="contact.html">contact us</a>.</p>
     </div>
@@ -1800,7 +1914,7 @@ HOW_DETAIL = [
                ('Create', 'Press Create (Ctrl+S). Not finished? Save a draft and carry on later.', 0, [[1075, 738, 190, 52], [1118, 626, 142, 100]])]},
     {'t': 'Print, save or share',
      'lead': 'The moment an invoice is created, you can look at it, save it or print it.',
-     'tip': ('Good to know', 'Tamil, Hindi and other Indian-language text prints correctly on thermal receipts, the same as on screen.'),
+     'tip': ('Good to know', 'Tamil, Hindi and other Indian-language text prints correctly on thermal receipts, the same as on screen. More in the <a href="faq.html#billing-and-printing">printing answers</a>.'),
      'screens': [('invoice-created', 'The Invoiceo Invoice Created Successfully card, with View Details, Preview PDF, Download PDF and Print Invoice'),
                  ('settings-pdf', 'The Invoiceo PDF Settings: page size, invoice designs and theme colour with a live preview'),
                  ('company-info', 'Settings → Company Info in Invoiceo, with the Show QR Code on Invoices switch')],
@@ -1882,7 +1996,7 @@ how_day_en = section(
 
 how_data_en = section(
     '<div class="data-grid"><div class="data-copy">'
-    + section_head('Your data', 'Safe on your computer, easy to move', 'There is no cloud and no account. Your records live on your computer, and you decide when to copy them.', 'data-title', left=True)
+    + section_head('Your data', 'Safe on your computer, easy to move', 'There is no cloud and no account. Your records live on your computer, and you decide when to copy them. <a href="privacy.html">Read the privacy policy.</a>', 'data-title', left=True)
     + '<ul class="data-list">'
       f'<li>{tile("hard-drive", "teal", "sm")}<div><b>Stored on your computer</b><span>Customers, products, invoices and payments never leave it.</span></div></li>'
       f'<li>{tile("refresh", "teal", "sm")}<div><b>Automatic backup</b><span>Turn it on in Settings → Backup, and a copy is saved while the app is open.</span></div></li>'
@@ -1894,7 +2008,7 @@ how_data_en = section(
     'your-data', '', 'data-title')
 
 how_install_en = section(
-    section_head('Before you install', 'What you need', 'Very little.', 'need-title')
+    section_head('Before you install', 'What you need', 'Very little. Questions? See the <a href="faq.html#installing-and-updating">install answers in the FAQ</a>.', 'need-title')
     + '<div class="grid-auto mt-4">'
     + f'<div class="card">{tile("monitor")}<h3>A computer</h3><p>Windows 10 or 11 (64-bit), macOS 12 or later, or Linux (a .deb package or an AppImage). Invoiceo is a desktop app; it is not for phones.</p></div>'
     + f'<div class="card">{tile("wifi-off")}<h3>No internet, no account</h3><p>You need the internet only to download it. Billing, printing and reports all work offline, and there is nothing to sign up for.</p></div>'
@@ -1906,7 +2020,7 @@ how_cta_en = f"""<section class="cta-section" aria-labelledby="cta-title">
   <div class="wrap">
     <div class="cta-band">
       <h2 id="cta-title">Ready to try it?</h2>
-      <p class="lead">Download Invoiceo, set up your business in a few minutes and make your first invoice today. It is free.</p>
+      <p class="lead">Download Invoiceo, set up your business in a few minutes and make your first invoice today. It is free. New here? <a href="about.html">Read who makes it</a>.</p>
       <div class="cta-row">
         {btn('Download free', 'download.html', 'inverse', 'lg', 'download')}
         {btn('Read the FAQ', 'faq.html', 'on-dark', 'lg', 'help')}
@@ -1923,13 +2037,52 @@ how_ld = {'@context': 'https://schema.org', '@type': 'HowTo', 'name': f'How to m
                     'text': d['lead'] + ' ' + ' '.join(f'{a}: {b}' for a, b, _, _ in d['steps'])} for i, d in enumerate(HOW_DETAIL)]}
 
 how_body = (page_head('How it works', f'How {NAME} works, step by step',
-                      'From the first setup to the last payment: what you do in each step, with the real screens.')
+                      'From the first setup to the last payment: what you do in each step, with the real screens.', byline())
             + '\n\n' + how_flow_en + '\n\n' + how_detail_en + '\n\n' + how_day_en + '\n\n' + how_data_en + '\n\n' + how_install_en + '\n\n' + how_cta_en)
 
 page('how-it-works.html', f'How {NAME} works: from setup to payment in five steps',
      f'See how {NAME} works, step by step: set up your business, add customers and products, create an invoice, print or save it and track payments, with the real screens.',
      'how', how_body, jsonld=how_ld, crumb='How it works')
 
+
+# ───────────────────────────────────── About ─────────────────────────────────────
+# Only facts the site already states elsewhere (Privacy, Licenses, FAQ, Customization, Changelog).
+about_body = page_head('About', f'About {NAME}', f'Free, open-source billing software from {BUSINESS}, a small software business in India.', byline()) + f'''
+
+<section class="page-body">
+  <div class="wrap">
+    <div class="about-grid">
+      <article class="about-card"><h2 class="h3">Who makes {NAME}</h2>
+        <p>{NAME} is made by {BUSINESS}, a small software business in India. We make free billing software for small shops and businesses, and we build custom features for businesses that ask for them.</p>
+        <p>The <a href="how-it-works.html">How it works</a> page shows what the app does, step by step, and the <a href="compare.html">comparison page</a> shows how it differs from other free billing apps.</p></article>
+      <article class="about-card"><h2 class="h3">Where it comes from</h2>
+        <p>{NAME} is built on <b>Invoiso</b>, an open-source invoicing app by ANOOP P, released under the MIT License. {BUSINESS} develops {NAME} from that code and releases it under the same licence.</p>
+        <p>Version 1.0.0 was the first release under the {NAME} name, in October 2026. The <a href="changelog.html">release notes</a> list every change since, and the <a href="licenses.html">Licenses page</a> has the full notice.</p></article>
+      <article class="about-card"><h2 class="h3">How it stays free</h2>
+        <p>There is no paid version, no trial and no limit on invoices. Development is paid for by <a href="customization.html">custom work</a> that businesses ask us to build, and by donations through <a href="https://buymeacoffee.com/madcreations" target="_blank" rel="noopener">Buy me a coffee</a>.</p>
+        <p>More in the FAQ: <a href="faq.html#about-invoiceo">how can it be free?</a></p></article>
+      <article class="about-card"><h2 class="h3">Your data</h2>
+        <p>{NAME} keeps your business data on your own computer. There is no online account and no cloud copy. The only things the app sends are a daily update check to GitHub and anonymous usage counts, which you can turn off in the app.</p>
+        <p>The <a href="privacy.html">privacy policy</a> explains this in full, and the <a href="terms.html">terms of use</a> cover the rest.</p></article>
+      <article class="about-card"><h2 class="h3">{NAME} at a glance</h2>
+        <ul class="plain-list">
+          <li><b>Current version:</b> {VERSION}, released {RELEASE_DATE}</li>
+          <li><b>Runs on:</b> Windows 10 and 11, macOS 12 or later, and Linux</li>
+          <li><b>App languages:</b> 8, including Tamil and Hindi</li>
+          <li><b>Licence:</b> MIT, free to use, copy and change</li>
+          <li><b>Price:</b> free; custom features are quoted per request</li>
+        </ul></article>
+      <article class="about-card"><h2 class="h3">Talk to us</h2>
+        <p>Questions, problems or ideas? See the <a href="contact.html">contact page</a>, or write to <a href="mailto:{EMAIL}">{EMAIL}</a>. Before you write, the <a href="faq.html">FAQ</a> may already have the answer.</p>
+        <p class="mt-2">{btn(f'Download {NAME} free', 'download.html', 'primary', '', 'download')}</p></article>
+    </div>
+  </div>
+</section>'''
+
+page('about.html', f'About {NAME}: the free billing software from {BUSINESS}',
+     f'About {NAME} and {BUSINESS}: who makes the free, open-source billing software, where it comes from, how it stays free and how to contact us.',
+     'about', about_body, crumb='About',
+     jsonld={'@context': 'https://schema.org', '@type': 'AboutPage', 'about': {'@id': ORG_ID}})
 
 # ─────────────────────────────────── 404 ───────────────────────────────────
 nf_body = f'''<section class="wrap not-found">
@@ -1947,7 +2100,7 @@ page('404.html', 'Page not found', f'This page could not be found on the {NAME} 
 print('pages written')
 
 # ───────────────────────── sitemap / robots / llms / manifest ──────────────
-pages = ['', 'ta.html', 'hi.html', 'how-it-works.html', 'download.html', 'compare.html', 'customization.html', 'reviews.html', 'faq.html', 'changelog.html', 'contact.html',
+pages = ['', 'ta.html', 'hi.html', 'how-it-works.html', 'about.html', 'download.html', 'compare.html', 'customization.html', 'reviews.html', 'faq.html', 'changelog.html', 'contact.html',
          'privacy.html', 'terms.html', 'licenses.html']
 with open(os.path.join(OUT, 'sitemap.xml'), 'w') as f:
     f.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n')
@@ -1956,7 +2109,10 @@ with open(os.path.join(OUT, 'sitemap.xml'), 'w') as f:
     f.write('</urlset>\n')
 
 with open(os.path.join(OUT, 'robots.txt'), 'w') as f:
-    f.write(f'User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n')
+    f.write('User-agent: *\nAllow: /\n\n'
+            # stated on purpose: search and assistant crawlers are welcome (they were already allowed by default)
+            + ''.join(f'User-agent: {bot}\nAllow: /\n\n' for bot in ('OAI-SearchBot', 'ChatGPT-User', 'Claude-SearchBot', 'Claude-User', 'PerplexityBot'))
+            + f'Sitemap: {SITE}/sitemap.xml\n')
 
 with open(os.path.join(OUT, 'llms.txt'), 'w') as f:
     f.write(f'''# {NAME}
@@ -1973,6 +2129,7 @@ with open(os.path.join(OUT, 'llms.txt'), 'w') as f:
 - [Home in Tamil]({SITE}/ta.html): the same page in Tamil (தமிழ்)
 - [Home in Hindi]({SITE}/hi.html): the same page in Hindi (हिन्दी)
 - [Download]({SITE}/download.html): installers for Windows, macOS and Linux, with install steps
+- [About]({SITE}/about.html): who makes Invoiceo, where it comes from and how it stays free
 - [How it works]({SITE}/how-it-works.html): the five steps from setup to payment, with each step explained
 - [Compare]({SITE}/compare.html): Invoiceo next to Vyapar, myBillBook, Tally and Sleek Bill, checked {COMPARE_CHECKED}
 - [Customization]({SITE}/customization.html): paid custom features, quoted per request

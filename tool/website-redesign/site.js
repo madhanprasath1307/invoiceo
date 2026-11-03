@@ -354,9 +354,13 @@
     ccOpen();
   });
   if (C.analyticsId) {
-    var choice = ccGet();
-    if (choice === 'yes') startAnalytics();
-    else if (choice !== 'no') window.setTimeout(ccOpen, 700);
+    // The page says whether the cookie box is on (build_website.py: CONSENT_BANNER). Off: analytics runs for everyone, no box.
+    if (document.body.getAttribute('data-consent') !== 'on') startAnalytics();
+    else {
+      var choice = ccGet();
+      if (choice === 'yes') startAnalytics();
+      else if (choice !== 'no') window.setTimeout(ccOpen, 700);
+    }
   }
 
   // Download tracking (only sends anything when analytics is on).
@@ -447,8 +451,8 @@
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
   function confetti(box) {
-    var colours = ['#60a5fa', '#34d399', '#fbbf24', '#f472b6', '#a78bfa', '#ffffff'];
-    for (var i = 0; i < 30; i++) {
+    var colours = ['#2f6fe4', '#14b8a6', '#f59e0b', '#7c5cf0', '#e11d48', '#60a5fa'];
+    for (var i = 0; i < 22; i++) {
       var c = document.createElement('i');
       var size = 6 + Math.random() * 6;
       c.style.cssText = 'left:' + (Math.random() * 100).toFixed(1) + '%;width:' + size.toFixed(1) + 'px;height:' +
@@ -478,23 +482,25 @@
     var fmt = function (v) { return v.toLocaleString('en-IN'); };
     var pct = goalMode ? Math.max(3, Math.min(100, Math.round(n * 100 / goal))) : 0;
     var asOf = M.asOf ? 'Counted up to ' + M.asOf + '.' : '';
-    // The poster's font (Poppins) is declared in site.css and only loads once the poster uses it.
     root = document.createElement('div');
     root.className = 'mile';
     var head = goalMode
       ? '<p class="mile-eyebrow">Help us reach</p>' +
         '<h2 id="mile-title" class="mile-title"><span class="mile-big">' + fmt(goal) + '</span><span class="mile-unit">downloads</span></h2>' +
         '<div class="mile-bar" aria-hidden="true"><span style="--to:' + pct + '%"></span></div>' +
-        '<p class="mile-so"><b class="mile-num">0</b><b>+</b> downloads so far</p>'
+        '<p class="mile-so"><i></i><span><b class="mile-num">0</b><b>+</b> downloads so far</span></p>'
       : '<p class="mile-eyebrow">Thank you</p>' +
         '<h2 id="mile-title" class="mile-title"><span class="mile-just">Just crossed</span><span class="mile-big"><span class="mile-num">0</span>+</span><span class="mile-unit">downloads</span></h2>';
     root.innerHTML =
       '<div class="mile-card" role="dialog" aria-modal="true" aria-labelledby="mile-title">' +
       '<button type="button" class="mile-x" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
       '<div class="mile-confetti" aria-hidden="true"></div>' +
+      '<div class="mile-doc d1" aria-hidden="true"><b>INVOICE INV-00021</b><i></i><i></i><span>€ 4,495.00 <em>PAID</em></span></div>' +
+      '<div class="mile-doc d2" aria-hidden="true"><b>RECEIPT · 80 MM</b><i></i><i></i><span>£ 1,036.50 <em>PAID</em></span></div>' +
       '<div class="mile-logo"><img src="assets/images/logo.png" alt="Invoiceo" width="196" height="68"></div>' +
       head +
-      '<p class="mile-sub">Free billing software for your computer.<br>No sign-up. No invoice limit.</p>' +
+      '<p class="mile-sub">Free billing software for your computer.</p>' +
+      '<ul class="mile-checks"><li>No sign-up</li><li>No invoice limit</li><li>Works offline</li></ul>' +
       '<div class="mile-actions"><a class="mile-cta" href="download.html">Download free</a></div>' +
       (asOf ? '<p class="mile-note">' + asOf + '</p>' : '') +
       '</div>';
@@ -1051,7 +1057,7 @@
   var figs = Array.prototype.slice.call(shots.children).filter(function (f) { return f.classList.contains('shot'); });
   var kind = function (fig) {
     var im = fig.querySelector('.window img');
-    var m = im && /screens\/([a-z-]+?)(?:-(?:ta|hi))?-1280\.jpg|screens\/([a-z-]+?)(?:-(?:ta|hi))?\.png/.exec(im.currentSrc || im.src);
+    var m = im && /screens\/([a-z-]+?)(?:-(?:ta|hi))?-1280\.(?:jpg|avif)|screens\/([a-z-]+?)(?:-(?:ta|hi))?\.(?:png|avif)/.exec(im.currentSrc || im.src);
     return m && (m[1] || m[2]);
   };
   figs.forEach(function (f) { var k = kind(f); if (DWELL[k]) f.setAttribute('data-dwell', DWELL[k]); });
@@ -1066,7 +1072,7 @@
   }
 
   function start(fig) {
-    var k = kind(fig), win = fig.querySelector('.window'), img = win && win.querySelector('img'), link = img && img.parentNode;
+    var k = kind(fig), win = fig.querySelector('.window'), img = win && win.querySelector('img'), link = img && (img.closest('a') || img.parentNode);
     if (!SCENES[k]) return true;                                   // nothing to play on this screen
     if (!img || !img.complete || !img.naturalWidth) return false;  // the picture is not loaded yet: try again soon
     var scene = document.createElement('div');

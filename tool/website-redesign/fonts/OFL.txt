@@ -4,7 +4,6 @@ Manrope           Copyright 2018 The Manrope Project Authors (https://github.com
 Fraunces          Copyright 2018 The Fraunces Project Authors (https://github.com/undercasetype/Fraunces)
 Noto Sans Tamil, Noto Sans Devanagari
                   Copyright 2022 The Noto Project Authors (https://github.com/notofonts)
-Poppins           Copyright 2020 The Poppins Project Authors (https://github.com/itfoundry/Poppins)
 
 The files are the Google Fonts versions of these fonts. The exact copyright notice of each font is also inside its file.
 
