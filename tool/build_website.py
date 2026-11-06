@@ -25,9 +25,9 @@ SITE = 'https://invoiceo.in'
 NAME = 'Invoiceo'
 BUSINESS = 'Madcreations'
 EMAIL = 'madhanprasat2002r@gmail.com'
-VERSION = '1.0.8'
-RELEASE_DATE = '28 October 2026'
-RELEASE_ISO = '2026-10-28'
+VERSION = '1.0.9'
+RELEASE_DATE = '6 November 2026'
+RELEASE_ISO = '2026-11-06'
 # When the website's own text last changed. Set it to the publish date whenever
 # page content changes between app releases; pages use the later of this and
 # RELEASE_ISO as their dateModified and sitemap <lastmod>. PAGE_UPDATED can give
@@ -37,6 +37,9 @@ SITE_UPDATED_ISO = '2026-11-03'
 # The code stays in site.js. False = analytics runs for everyone, as before, and no box is shown. Set True to bring the box back,
 # then rebuild: this switches the box, the footer link and the Privacy text together. (Visitors from the EU/UK should be asked.)
 CONSENT_BANNER = False
+# Diwali 2026: banner, cracker bursts and the "make a wish" lantern (assets/js/diwali.js + assets/css/diwali.css).
+# The script switches itself off from 14 November 2026 (END in diwali.js); set False and rebuild to remove it from the pages.
+DIWALI = True
 PAGE_UPDATED = {}
 PAGE_MODIFIED = {}  # filled by page(): filename -> dateModified, reused by the sitemap
 COFFEE = 'https://buymeacoffee.com/madcreations'
@@ -545,6 +548,10 @@ def page(filename, title, description, active, body, jsonld=None, noindex=False,
         alternates = ''.join(f'\n  <link rel="alternate" hreflang="{code}" href="{SITE}/{"" if f == "index.html" else f}">'
                              for code, f in HOMES.items())
         alternates += f'\n  <link rel="alternate" hreflang="x-default" href="{SITE}/">'
+    DIWALI_CSS = DIWALI_JS = ''
+    if DIWALI:
+        DIWALI_CSS = f'\n  <link rel="stylesheet" href="{asset("assets/css/diwali.css")}">'
+        DIWALI_JS = f'\n<script defer src="{asset("assets/js/diwali.js")}"></script>'
     doc = f'''<!doctype html>
 <html lang="{lang}">
 <head>
@@ -572,7 +579,7 @@ def page(filename, title, description, active, body, jsonld=None, noindex=False,
   <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png">
   <link rel="manifest" href="site.webmanifest">
   {FONT_LINKS[TEXT[lang]['shell']['fonts']]}
-  <link rel="stylesheet" href="{asset('assets/css/site.css')}">{ld}
+  <link rel="stylesheet" href="{asset('assets/css/site.css')}">{DIWALI_CSS}{ld}
 </head>
 <body data-consent="{'on' if CONSENT_BANNER else 'off'}">
 {header(active, home=home, base=noindex, lang=lang)}
@@ -581,7 +588,7 @@ def page(filename, title, description, active, body, jsonld=None, noindex=False,
 </main>
 {footer(home=home, lang=lang)}
 <script src="{asset('assets/js/config.js')}"></script>
-<script src="{asset('assets/js/site.js')}"></script>
+<script src="{asset('assets/js/site.js')}"></script>{DIWALI_JS}
 </body>
 </html>
 '''
@@ -1607,6 +1614,17 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
     <article class="release" id="v{VERSION}">
       <h2>Version {VERSION} {badge('Latest', 'brand')}</h2>
       <p class="date">{date_tag(RELEASE_ISO)}</p>
+      <ul>
+        <li><b>Pick your username from a list.</b> On the sign-in screen the Username box is now a list, like the Company box, so nobody has to remember or type a username. {NAME} still remembers who signed in last on that computer, so you usually only type the password.</li>
+        <li><b>“Manage companies” is easier to find.</b> The small gear at the bottom of the sign-in screen is now a company icon with the words Manage companies next to it.</li>
+        <li><b>Dashboard date ranges.</b> The cards and the Sales Overview chart can show Today, This week, This month, Last month or a Custom range, and the dashboard opens on Today.</li>
+        <li><b>A finished page after you update an invoice.</b> Updating an invoice, quotation or receipt now opens the same finished page as creating one, worded “Updated Successfully!”, with View, Preview, Download, Print and Go to the list.</li>
+        <li>Your data and accounts are unchanged: this release needs no database upgrade.</li>
+      </ul>
+    </article>
+    <article class="release" id="v1.0.8">
+      <h2>Version 1.0.8</h2>
+      <p class="date">{date_tag("2026-10-28")}</p>
       <ul>
         <li><b>Easier sign-in.</b> Click the arrow in the Username box to pick your account from a list, and {NAME} remembers who signed in last on that computer, so you only type the password.</li>
         <li><b>Letter case no longer matters.</b> “ravi”, “Ravi” and “RAVI” open the same account. Your username can be any name you can remember, including your email address. Two older accounts that differ only by case (for example “Bob” and “bob”) still need the exact spelling, and a new account can no longer be made with a name that differs from an existing one only by case.</li>
