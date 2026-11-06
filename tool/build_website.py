@@ -783,6 +783,23 @@ AMMA_WORK = [
 ]
 
 
+# Recent custom work, third example: a client's own tax invoice layout (Sigma Healthtech, Thane). The picture is the real
+# layout printing a made-up company, customer and items (never a customer's real bill, and no logo). The customer is named
+# only once they agree (SIGMA_NAMED); until then the page says "a medical imaging supplies company in Maharashtra".
+SIGMA_NAMED = True
+SIGMA_WHO = 'Sigma Healthtech, Thane' if SIGMA_NAMED else 'a medical imaging supplies company in Maharashtra'
+_sigma_png = 'assets/images/docs/sigma-bill.png'
+_sw, _sh = png_size(os.path.join(OUT, _sigma_png))
+SIGMA_WORK = [
+    'A tax invoice in the company’s own layout, copied from the bill they already used: logo and details on top, a customer box with the place of supply, and a blue-lined item table that fills the page',
+    'Product name with its description in brackets (only when there is one), HSN, quantity with unit, rate, taxable value and tax',
+    'IGST for another state or CGST + SGST within the state, chosen with one switch, and the two halves always add up to the paisa',
+    'Amount in words, bank details, terms and conditions and a signature box, with “ORIGINAL FOR RECIPIENT” at the top',
+    'It follows the app’s own settings: switch off the phone, address, bank details or any other field and it is left off the bill',
+    'The heading follows the title chosen on the bill (Tax Invoice, Cash Bill, Credit Note and more), and a long bill carries on to a second page with the headings repeated',
+]
+
+
 # Drawn printers for the sample documents (shown only when the screens are tabs; the page or receipt is fed out of them).
 PRINTERS = {
     'paper-a4': (
@@ -1173,6 +1190,22 @@ recent_work_2 = f'''<section class="section section-subtle" id="work-sales-purch
   </div>
 </section>'''
 
+recent_work_3 = f'''<section class="section" id="work-tax-invoice" aria-labelledby="work3-title">
+  <div class="wrap">
+    {section_head('Recent work', 'A tax invoice in the company’s own layout', 'Made for ' + SIGMA_WHO + ': their existing bill, rebuilt inside ' + NAME + ' so it prints just as their customers expect.', 'work3-title')}
+    <div class="split split-top mt-4">
+      <figure class="doc-full">
+        <a href="{_sigma_png}" target="_blank" rel="noopener" title="Open full size"><img src="{_sigma_png}" width="{_sw}" height="{_sh}" alt="A sample blue-lined A4 tax invoice made with {NAME}: company details, customer detail with place of supply, items with HSN, IGST, amount in words, bank details and terms" loading="lazy" decoding="async"></a>
+        <figcaption>Shown with sample data: every name and number on it is made up.</figcaption>
+      </figure>
+      <div class="stack" style="gap: 28px">
+        <div class="stack"><h3 class="h4">What it does</h3>{checks(SIGMA_WORK)}</div>
+        <p class="small">It is a paid custom version of {NAME}, made for that company. See <a href="reviews.html#tax-invoice-layout">it on the Reviews page</a>, or <a href="#request">ask for your own bill layout</a>.</p>
+      </div>
+    </div>
+  </div>
+</section>'''
+
 customization_body = page_head(
     'Custom features', 'Customization',
     f'{NAME} is free to use. When your business needs something more, we can build it for you. Every request is quoted on its own, and you decide before any work starts. See <a href="reviews.html">a custom bill we built</a>.', byline()) + f'''
@@ -1188,6 +1221,8 @@ customization_body = page_head(
 {recent_work}
 
 {recent_work_2}
+
+{recent_work_3}
 
 <section class="section section-subtle" aria-labelledby="custom-how">
   <div class="wrap">
@@ -1333,6 +1368,22 @@ reviews_body = page_head('Reviews', 'What our customers say',
   </div>
 </section>
 
+<section class="section" aria-labelledby="rv-sigma" id="tax-invoice-layout">
+  <div class="wrap">
+    <div class="review-story stack">
+      <div class="stack" style="gap: 10px">
+        <p>{badge('Custom feature', 'brand', 'tool')}</p>
+        <h2 class="h3" id="rv-sigma">A tax invoice in their own layout, built for {SIGMA_WHO}</h2>
+        <p>The company already had a bill their customers know. We rebuilt it inside {NAME}, so each bill is made in a few clicks and prints in the same blue-lined layout, with IGST or CGST + SGST, amount in words, bank details and terms.</p>
+      </div>
+      <figure class="doc-full"><a href="{_sigma_png}" target="_blank" rel="noopener" title="Open full size"><img src="{_sigma_png}" width="{_sw}" height="{_sh}" alt="A sample tax invoice made with {NAME} in a client's own layout: company details, customer detail with place of supply, items with HSN, IGST, amount in words, bank details and terms" loading="lazy" decoding="async"></a>
+        <figcaption>Shown with sample data: every name and number on it is made up.</figcaption></figure>
+      <div class="card stack"><h3 class="h4">What this bill does</h3>{checks(SIGMA_WORK)}</div>
+      <p class="center">{btn('See this and other custom work', 'customization.html#work-tax-invoice', 'secondary', '', 'arrow')}</p>
+    </div>
+  </div>
+</section>
+
 <section class="section section-subtle" aria-labelledby="rv-about">
   <div class="wrap">
     <div class="about-grid">
@@ -1343,6 +1394,8 @@ reviews_body = page_head('Reviews', 'What our customers say',
       an ordinary invoice does not have. We built the bill into {NAME} for them as a paid customization.</p>
     <p>The sales-and-purchase bill was made for {AMMA_WHO}, as a paid customization too: it is delivered as a private
       version of {NAME} made for that shop, and it is not part of the free app.</p>
+    <p>The tax invoice layout was made for {SIGMA_WHO}, also as a paid customization: their own bill, rebuilt inside {NAME} as a
+      private version made for that company.</p>
     <p>If your trade needs a bill of its own, see <a href="customization.html">custom bill formats
       and features</a>. Every request is quoted on its own, and you decide before any work starts.</p>
     </div>
@@ -2277,6 +2330,10 @@ full += ['', f'### Recent work: sales and purchase on one bill, for {AMMA_WHO}',
          'The shop sells to a customer and also buys from the same customer, on one bill. A private version of '
          f'{NAME} made for that shop, not part of the free app. It shows (sample images use made-up names and numbers):', '']
 full += [f'- {md(i)}' for i in AMMA_WORK]
+full += ['', f'### Recent work: a tax invoice in the company’s own layout, for {SIGMA_WHO}', '',
+         'Their existing bill rebuilt inside ' + NAME + ' as a private version made for that company, not part of the free app. '
+         'It shows (sample images use made-up names and numbers):', '']
+full += [f'- {md(i)}' for i in SIGMA_WORK]
 full += ['', '## Customer reviews', '',
          f'Real customers only, shown with their permission, in words they have approved ({SITE}/reviews.html).', '']
 for t in TESTIMONIALS:
