@@ -809,6 +809,30 @@
       }
     }
   },
+  "createInvoiceUpdatedHeadline": "{invoiceTypeLabel} Updated Successfully!",
+  "@createInvoiceUpdatedHeadline": {
+    "placeholders": {
+      "invoiceTypeLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "createInvoiceUpdatedTitleShort": "{invoiceTypeLabel} Updated",
+  "@createInvoiceUpdatedTitleShort": {
+    "placeholders": {
+      "invoiceTypeLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "mSuccessUpdatedSubtitle": "Your changes to the {type} have been saved.",
+  "@mSuccessUpdatedSubtitle": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
   "createInvoiceCreatedHeadline": "{invoiceTypeLabel} Created Successfully!",
   "@createInvoiceCreatedHeadline": {
     "placeholders": {

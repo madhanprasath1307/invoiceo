@@ -186,6 +186,9 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
   bool _isPerItem = false;
   bool _isInterState = false; // India: interstate supply → IGST instead of CGST/SGST
   bool isEditing = false;
+  // True after an invoice that was being edited has been saved: the page then shows the same finished screen as
+  // after creating one, worded "updated" (isEditing is false while it shows).
+  bool _justUpdated = false;
   bool _saveAndPrintInFlight = false; // one create-and-print at a time
   // Settings > "Print automatically after creating": when on, Create
   // already prints, so Create ▾ leaves out "Save & Print".
@@ -1829,7 +1832,9 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
       // Always save first, even when editing an invoice that looks unchanged:
       // printing the stored copy must never hand the customer a bill that
       // differs from the screen.
-      final saved = isEdit ? await _updateInvoice() : await _createInvoice();
+      final saved = isEdit
+          ? await _updateInvoice(toFinishedScreen: !forcePrint && !preview)
+          : await _createInvoice();
       if (!saved || !mounted || _invoice == null) return;
       if (preview) {
         await InvoicePdfServices.previewPDF(context, _invoice!);
@@ -2913,6 +2918,12 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
 
   Future<void> resetValues(String invoiceType_) async {
     if(!mounted) return;
+    if (_justUpdated) {
+      // Starting a new document from the "updated" screen: the page that opened this form
+      // for editing forgets the invoice, as when "+ New Invoice" is tapped while editing.
+      _justUpdated = false;
+      widget.onCreateNewInvoice?.call();
+    }
     final invType = await InvoicePdfServices.peekNextInvoiceNumber(invoiceType_);
     if(!mounted) return;
     setState(() {
@@ -4093,7 +4104,9 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
     );
   }
 
-  Future<bool> _updateInvoice() async {
+  /// [toFinishedScreen]: after saving, leave the form for the finished page worded "updated" (the plain Update
+  /// button). The print shortcuts keep the form, so an edit can go on after printing.
+  Future<bool> _updateInvoice({bool toFinishedScreen = false}) async {
     if (_invoice == null) return false;
     if (!_linesNotNegative()) return false;
 
@@ -4196,6 +4209,11 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
       setState(() {
         _invoice = refreshedInvoice ?? updatedInvoice;
         isLoading = false;
+        if (toFinishedScreen) {
+          // Leave the edit form for the finished screen, like after creating.
+          isEditing = false;
+          _justUpdated = true;
+        }
       });
       _markFormClean();
 
@@ -4278,11 +4296,11 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
                       children: [
                         _successBadgeModern(),
                         const SizedBox(height: 14),
-                        Text(l10n.createInvoiceCreatedHeadline(type),
+                        Text(_justUpdated ? l10n.createInvoiceUpdatedHeadline(type) : l10n.createInvoiceCreatedHeadline(type),
                             textAlign: TextAlign.center,
                             style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
                         const SizedBox(height: 4),
-                        Text(l10n.mSuccessSubtitle(type.toLowerCase()),
+                        Text(_justUpdated ? l10n.mSuccessUpdatedSubtitle(type.toLowerCase()) : l10n.mSuccessSubtitle(type.toLowerCase()),
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant)),
                         const SizedBox(height: 16),
@@ -4813,7 +4831,9 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
                       Flexible(
                         child: Text(
                           _invoice != null && !isEditing
-                              ? AppLocalizations.of(context)!.createInvoiceCreatedTitleShort(_invoiceTypeLabel(invoiceType))
+                              ? (_justUpdated
+                                  ? AppLocalizations.of(context)!.createInvoiceUpdatedTitleShort(_invoiceTypeLabel(invoiceType))
+                                  : AppLocalizations.of(context)!.createInvoiceCreatedTitleShort(_invoiceTypeLabel(invoiceType)))
                               : widget.invoiceToEdit != null
                                   ? AppLocalizations.of(context)!.createInvoiceEditTitle(_invoiceTypeLabel(invoiceType))
                                   : _convertFromId != null
@@ -6820,7 +6840,9 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
   String _screenTitle(AppLocalizations l10n) {
     final type = _invoiceTypeLabel(invoiceType);
     if (_invoice != null && !isEditing) {
-      return l10n.createInvoiceCreatedTitleShort(type);
+      return _justUpdated
+          ? l10n.createInvoiceUpdatedTitleShort(type)
+          : l10n.createInvoiceCreatedTitleShort(type);
     }
     if (widget.invoiceToEdit != null) return l10n.createInvoiceEditTitle(type);
     if (_convertFromId != null) {
@@ -6886,8 +6908,11 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
     if (hasModernTopBar) {
       publishModernHeader((page) => ModernPageHeader(
             page: page,
-            title: AppLocalizations.of(context)!
-                .createInvoiceCreatedTitleShort(_invoiceTypeLabel(invoiceType)),
+            title: _justUpdated
+                ? AppLocalizations.of(context)!
+                    .createInvoiceUpdatedTitleShort(_invoiceTypeLabel(invoiceType))
+                : AppLocalizations.of(context)!
+                    .createInvoiceCreatedTitleShort(_invoiceTypeLabel(invoiceType)),
             onBack: widget.onGoToList == null
                 ? null
                 : () => widget.onGoToList!(invoiceType),

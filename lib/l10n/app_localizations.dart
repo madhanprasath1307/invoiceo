@@ -2294,6 +2294,24 @@ abstract class AppLocalizations {
   /// **'Error updating invoice: {e}'**
   String createInvoiceErrorUpdatingMessage(String e);
 
+  /// No description provided for @createInvoiceUpdatedHeadline.
+  ///
+  /// In en, this message translates to:
+  /// **'{invoiceTypeLabel} Updated Successfully!'**
+  String createInvoiceUpdatedHeadline(String invoiceTypeLabel);
+
+  /// No description provided for @createInvoiceUpdatedTitleShort.
+  ///
+  /// In en, this message translates to:
+  /// **'{invoiceTypeLabel} Updated'**
+  String createInvoiceUpdatedTitleShort(String invoiceTypeLabel);
+
+  /// No description provided for @mSuccessUpdatedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your changes to the {type} have been saved.'**
+  String mSuccessUpdatedSubtitle(String type);
+
   /// No description provided for @createInvoiceCreatedHeadline.
   ///
   /// In en, this message translates to:

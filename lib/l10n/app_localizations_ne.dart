@@ -1312,6 +1312,21 @@ class AppLocalizationsNe extends AppLocalizations {
   }
 
   @override
+  String createInvoiceUpdatedHeadline(String invoiceTypeLabel) {
+    return '$invoiceTypeLabel Updated Successfully!';
+  }
+
+  @override
+  String createInvoiceUpdatedTitleShort(String invoiceTypeLabel) {
+    return '$invoiceTypeLabel Updated';
+  }
+
+  @override
+  String mSuccessUpdatedSubtitle(String type) {
+    return 'Your changes to the $type have been saved.';
+  }
+
+  @override
   String createInvoiceCreatedHeadline(String invoiceTypeLabel) {
     return '$invoiceTypeLabel सफलतापूर्वक सिर्जना गरियो!';
   }

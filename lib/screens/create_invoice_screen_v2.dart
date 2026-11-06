@@ -172,6 +172,9 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
   bool _isPerItem = false;
   bool _isInterState = false; // India: interstate supply → IGST instead of CGST/SGST
   bool isEditing = false;
+  // True after an invoice that was being edited has been saved: the page then shows the same finished screen as
+  // after creating one, worded "updated" (isEditing is false while it shows).
+  bool _justUpdated = false;
   bool isLoading = false;
   // V2: inline product search dropdown (replaces click-to-open popup;
   // the popup dialog is now reserved for the Ctrl+F shortcut only).
@@ -2321,6 +2324,12 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
 
   Future<void> resetValues(String invoiceType_) async {
     if(!mounted) return;
+    if (_justUpdated) {
+      // Starting a new document from the "updated" screen: the page that opened this form
+      // for editing forgets the invoice, as when "+ New Invoice" is tapped while editing.
+      _justUpdated = false;
+      widget.onCreateNewInvoice?.call();
+    }
     final invType = await InvoicePdfServices.peekNextInvoiceNumber(invoiceType_);
     if(!mounted) return;
     setState(() {
@@ -3498,7 +3507,8 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
     );
   }
 
-  Future<bool> _updateInvoice() async {
+  /// [toFinishedScreen]: after saving, leave the form for the finished page worded "updated" (the Update button).
+  Future<bool> _updateInvoice({bool toFinishedScreen = false}) async {
     if (_invoice == null) return false;
 
     if (nameController.text.isEmpty) {
@@ -3600,6 +3610,11 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
       setState(() {
         _invoice = refreshedInvoice ?? updatedInvoice;
         isLoading = false;
+        if (toFinishedScreen) {
+          // Leave the edit form for the finished screen, like after creating.
+          isEditing = false;
+          _justUpdated = true;
+        }
       });
       _markFormClean();
 
@@ -3722,7 +3737,9 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  AppLocalizations.of(context)!.createInvoiceCreatedHeadline(_invoiceTypeLabel(invoiceType)),
+                  _justUpdated
+                      ? AppLocalizations.of(context)!.createInvoiceUpdatedHeadline(_invoiceTypeLabel(invoiceType))
+                      : AppLocalizations.of(context)!.createInvoiceCreatedHeadline(_invoiceTypeLabel(invoiceType)),
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -3974,7 +3991,7 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
         const SingleActivator(LogicalKeyboardKey.keyS, control: true): () {
           if (showingSuccessScreen) return;
           if (invoiceItems.isNotEmpty && !isLoading) {
-            widget.invoiceToEdit != null ? _updateInvoice() : _createInvoice();
+            widget.invoiceToEdit != null ? _updateInvoice(toFinishedScreen: true) : _createInvoice();
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(AppLocalizations.of(context)!.createInvoiceAddItemBeforeCreatingMessage)),
@@ -4049,7 +4066,9 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
                       Flexible(
                         child: Text(
                           _invoice != null && !isEditing
-                              ? AppLocalizations.of(context)!.createInvoiceCreatedTitleShort(_invoiceTypeLabel(invoiceType))
+                              ? (_justUpdated
+                                  ? AppLocalizations.of(context)!.createInvoiceUpdatedTitleShort(_invoiceTypeLabel(invoiceType))
+                                  : AppLocalizations.of(context)!.createInvoiceCreatedTitleShort(_invoiceTypeLabel(invoiceType)))
                               : widget.invoiceToEdit != null
                                   ? AppLocalizations.of(context)!.createInvoiceEditTitle(_invoiceTypeLabel(invoiceType))
                                   : widget.convertFromQuotationId != null

@@ -45,6 +45,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   // The active company's accounts, for the Username drop-down.
   List<String> _usernames = [];
 
+  /// The drop-down's current choice: the account in the list that matches the
+  /// filled-in name (letter case ignored), or none.
+  String? get _selectedUsername {
+    final text = _usernameController.text.trim().toLowerCase();
+    if (text.isEmpty) return null;
+    for (final n in _usernames) {
+      if (n.toLowerCase() == text) return n;
+    }
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -74,7 +85,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!mounted) return;
     setState(() => _usernames = names);
     if (_usernameController.text.isEmpty && last != null && names.contains(last)) {
-      _usernameController.text = last;
+      setState(() => _usernameController.text = last!);
+      _passwordFocus.requestFocus();
+    } else if (_usernameController.text.isEmpty && names.length == 1) {
+      // Only one account: nothing to choose.
+      setState(() => _usernameController.text = names.first);
       _passwordFocus.requestFocus();
     }
   }
@@ -379,51 +394,51 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           AppSpacing.hMedium,
                         ],
-                        TextField(
-                          controller: _usernameController,
-                          textInputAction: TextInputAction.next,
-                          onSubmitted: (_) => _passwordFocus.requestFocus(),
-                          decoration: InputDecoration(
-                            labelText: cfg.isCloud
-                                ? l10n.fieldEmailLabel
-                                : l10n.loginUsernameLabel,
-                            prefixIcon: const Icon(Icons.person),
-                            border: const OutlineInputBorder(),
-                            suffixIcon: (!cfg.isCloud && _usernames.isNotEmpty)
-                                ? PopupMenuButton<String>(
-                                    key: const ValueKey('loginUserPicker'),
-                                    tooltip: l10n.loginUsernameLabel,
-                                    icon: const Icon(Icons.arrow_drop_down),
-                                    onSelected: (name) {
-                                      _usernameController.text = name;
-                                      _passwordFocus.requestFocus();
-                                    },
-                                    itemBuilder: (_) => [
-                                      for (final name in _usernames)
-                                        PopupMenuItem<String>(
-                                          value: name,
-                                          child: Row(
-                                            children: [
-                                              const Icon(Icons.person_outline,
-                                                  size: 18),
-                                              const SizedBox(width: 8),
-                                              Flexible(
-                                                child: Text(name,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                    ],
-                                  )
-                                : null,
+                        if (!cfg.isCloud && _usernames.isNotEmpty)
+                          // Pick-only, like the company selector: nobody has
+                          // to remember or type the username.
+                          DropdownButtonFormField<String>(
+                            key: const ValueKey('loginUserPicker'),
+                            isExpanded: true,
+                            value: _selectedUsername,
+                            decoration: InputDecoration(
+                              labelText: l10n.loginUsernameLabel,
+                              prefixIcon: const Icon(Icons.person),
+                              border: const OutlineInputBorder(),
+                            ),
+                            items: [
+                              for (final name in _usernames)
+                                DropdownMenuItem(
+                                  value: name,
+                                  child: Text(name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
+                                ),
+                            ],
+                            onChanged: (name) {
+                              if (name == null) return;
+                              setState(() => _usernameController.text = name);
+                              _passwordFocus.requestFocus();
+                            },
+                          )
+                        else
+                          // Cloud edition signs in by email; and if the list
+                          // could not be read, typing a name still works.
+                          TextField(
+                            controller: _usernameController,
+                            textInputAction: TextInputAction.next,
+                            onSubmitted: (_) => _passwordFocus.requestFocus(),
+                            decoration: InputDecoration(
+                              labelText: cfg.isCloud
+                                  ? l10n.fieldEmailLabel
+                                  : l10n.loginUsernameLabel,
+                              prefixIcon: const Icon(Icons.person),
+                              border: const OutlineInputBorder(),
+                            ),
+                            keyboardType: cfg.isCloud
+                                ? TextInputType.emailAddress
+                                : TextInputType.text,
                           ),
-                          keyboardType: cfg.isCloud
-                              ? TextInputType.emailAddress
-                              : TextInputType.text,
-                        ),
                         AppSpacing.hMedium,
                         TextField(
                           controller: _passwordController,
@@ -548,9 +563,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             Positioned(
               right: 16,
               bottom: 16,
-              child: IconButton(
-                tooltip: l10n.loginCompanyGearTooltip,
-                icon: const Icon(Icons.settings),
+              // Icon plus a visible label, so people can see that the company can be changed here.
+              child: TextButton.icon(
+                icon: const Icon(Icons.corporate_fare, size: 22),
+                label: Text(l10n.loginCompanyGearTooltip),
                 onPressed: _openCompanyManagement,
               ),
             ),

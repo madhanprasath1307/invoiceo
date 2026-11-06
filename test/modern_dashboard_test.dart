@@ -364,6 +364,11 @@ void main() {
 
     testWidgets('invoice status: paid, partial, unpaid, overdue add up', (tester) async {
       await open(tester);
+      // The page starts on Today; the sample invoices are spread over this month.
+      await tester.tap(find.byKey(const ValueKey('modernDashRange')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('modernPreset_thisMonth')));
+      await settle(tester);
       final status = find.byKey(const ValueKey('modernDashStatus'));
       expect(tester.widget<Text>(find.byKey(const ValueKey('modernDashStatusTotal'))).data, '4');
       for (final label in ['Paid', 'Unpaid', 'Partial', 'Overdue']) {

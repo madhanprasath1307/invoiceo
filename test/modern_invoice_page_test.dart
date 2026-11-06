@@ -225,6 +225,45 @@ void main() {
       await settle(tester);
       expect(started, 1);
     });
+
+    testWidgets('updating an invoice leaves the form for the finished page, worded "updated"', (tester) async {
+      Invoice? saved;
+      var started = 0;
+      final lists = <String>[];
+      await open(tester, inFrame: true, onCreateNew: () => started++, onGoToList: lists.add, beforePump: () async {
+        final p = Product(id: 'e2', name: 'Edit Dal', description: '', price: 60, stock: 0,
+            hsncode: '8002', tax_rate: 0, unlimitedStock: true);
+        await InvoiceService.insertInvoice(Invoice(
+            id: '00000010', invoiceNumber: '00000010', type: 'Invoice',
+            customer: Customer(id: '', name: 'Old Buyer', email: '', phone: '', address: '', gstin: ''),
+            items: [InvoiceItem(product: p, quantity: 1)], date: DateTime(2026, 10, 1)));
+        saved = await InvoiceService.getInvoiceById('00000010');
+      }, toEdit: () => saved);
+      expect(find.byKey(const ValueKey('modernSuccess')), findsNothing, reason: 'the edit form first');
+
+      await tester.tap(find.byKey(const ValueKey('modernCreate')));
+      await settle(tester);
+      await settle(tester);
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('modernSuccess')), findsOneWidget, reason: 'the finished page, as after creating');
+      expect(find.byKey(const ValueKey('modernSuccessBadge')), findsOneWidget);
+      expect(find.text('Invoice Updated Successfully!'), findsOneWidget);
+      expect(find.text('Your changes to the invoice have been saved.'), findsOneWidget);
+      expect(find.text('Invoice Created Successfully!'), findsNothing);
+      expect(find.byKey(const ValueKey('modernCreateDocument')), findsNothing, reason: 'no edit form any more');
+
+      // Go to Invoices opens the list.
+      await tester.tap(find.byKey(const ValueKey('modernSuccessGoToList')));
+      expect(lists, ['Invoice']);
+
+      // Create New Invoice tells the page that opened the edit to forget it, then shows a fresh form.
+      await tester.tap(find.byKey(const ValueKey('modernSuccessNewInvoice')));
+      await settle(tester);
+      expect(started, 1);
+      expect(find.byKey(const ValueKey('modernSuccess')), findsNothing);
+      expect(find.byKey(const ValueKey('modernCreate')), findsOneWidget, reason: 'a fresh invoice form');
+    });
   });
 
   group('customer', () {

@@ -196,10 +196,28 @@ void main() {
   Finder rail(String label) => find.descendant(
       of: find.byType(NavigationRail), matching: find.text(label));
 
+  /// The account currently chosen in the Login screen's user drop-down.
+  String? pickedUser(WidgetTester tester) => tester
+      .widget<DropdownButtonFormField<String>>(
+          find.byKey(const ValueKey('loginUserPicker')))
+      .initialValue;
+
+  /// The Login screen lists the accounts in a pick-only drop-down; with no
+  /// accounts to list it is a plain text box.
+  Future<void> pickUser(WidgetTester tester, String user, AppLocalizations l) async {
+    final picker = find.byKey(const ValueKey('loginUserPicker'));
+    if (picker.evaluate().isEmpty) {
+      await tester.enterText(field(TextField, l.loginUsernameLabel), user);
+      return;
+    }
+    await tap(tester, picker, rounds: 4);
+    await tap(tester, find.text(user).last, rounds: 4);
+  }
+
   Future<void> login(WidgetTester tester, String user, String pass,
       {AppLocalizations? l10n}) async {
     final l = l10n ?? en;
-    await tester.enterText(field(TextField, l.loginUsernameLabel), user);
+    await pickUser(tester, user, l);
     await tester.enterText(field(TextField, l.loginPasswordLabel), pass);
     await tap(tester, find.widgetWithText(ElevatedButton, l.loginButton),
         rounds: 16);
@@ -279,9 +297,9 @@ void main() {
 
       // First-run hint, fields pre-filled with admin/admin.
       expect(find.textContaining('First time here?'), findsOneWidget);
-      final user = tester.widget<TextField>(field(TextField, en.loginUsernameLabel));
+      final user = pickedUser(tester);
       final pass = tester.widget<TextField>(field(TextField, en.loginPasswordLabel));
-      expect(user.controller!.text, 'admin');
+      expect(user, 'admin');
       expect(pass.controller!.text, 'admin');
       // Only one company: no picker on the login card.
       expect(find.text(en.loginCompanySelectorLabel), findsNothing);
@@ -408,11 +426,7 @@ void main() {
       expect(find.textContaining('First time here?'), findsNothing);
       // Login remembers who signed in last: the name is filled in, the
       // password box is not.
-      expect(
-          tester.widget<TextField>(field(TextField, en.loginUsernameLabel))
-              .controller!
-              .text,
-          'admin');
+      expect(pickedUser(tester), 'admin');
       expect(
           tester.widget<TextField>(field(TextField, en.loginPasswordLabel))
               .controller!
@@ -471,8 +485,7 @@ void main() {
       expect(find.byType(LoginScreen), findsOneWidget);
       expect(find.byType(DashboardScreen), findsNothing);
 
-      // Empty fields.
-      await tester.enterText(field(TextField, en.loginUsernameLabel), '');
+      // No password typed (the user is pre-selected, so only the password is missing).
       await tester.enterText(field(TextField, en.loginPasswordLabel), '');
       await tap(tester, find.widgetWithText(ElevatedButton, en.loginButton));
       expect(find.text(en.loginEnterCredentialsMessage(en.loginUsernameLabel)),
@@ -488,11 +501,11 @@ void main() {
       await tester.pump(const Duration(seconds: 5));
       await settle(tester, 4);
 
-      // Wrong password, the old default, unknown user.
+      // Wrong password and the old default. (An unknown user can no longer be
+      // chosen: the username is pick-only.)
       for (final creds in [
         ['admin', 'wrong-pass'],
         ['admin', 'admin'],
-        ['nobody', _adminNewPassword],
       ]) {
         await login(tester, creds[0], creds[1]);
         expect(find.text(en.loginInvalidCredentialsMessage), findsOneWidget,
@@ -502,9 +515,8 @@ void main() {
         await settle(tester, 4);
       }
 
-      // Spaces around the username and its letter case are ignored ("ADMIN"
-      // signs in as admin); Enter in the password box logs in.
-      await tester.enterText(field(TextField, en.loginUsernameLabel), '  ADMIN ');
+      // Enter in the password box logs in.
+      await pickUser(tester, 'admin', en);
       await tester.enterText(
           field(TextField, en.loginPasswordLabel), _adminNewPassword);
       await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -789,11 +801,12 @@ void main() {
       expect(await io(tester, CompanyRegistryService.getActiveCompanyId), branch.id);
       expect(File(p.join(dataDir.path, branch.dbFileName)).existsSync(), isTrue);
 
-      // The seeded admin/admin does not exist in the new company.
-      await login(tester, 'admin', 'admin');
-      expect(find.text(en.loginInvalidCredentialsMessage), findsOneWidget);
-      await tester.pump(const Duration(seconds: 5));
-      await settle(tester, 4);
+      // The seeded admin does not exist in the new company: its only account
+      // (owner2) is chosen for you and admin is not offered.
+      expect(pickedUser(tester), 'owner2');
+      await tap(tester, find.byKey(const ValueKey('loginUserPicker')), rounds: 4);
+      expect(find.text('admin'), findsNothing);
+      await tap(tester, find.text('owner2').last, rounds: 4);
       await login(tester, 'owner2', 'Branch@2026');
       noErrors(tester, 'login company B');
       expect(find.byType(ChangePasswordScreen), findsNothing);
@@ -824,11 +837,10 @@ void main() {
       await tap(tester, find.text(en.companyMgmtSwitchButton).last, rounds: 16);
       noErrors(tester, 'switch to A');
       expect(find.byType(LoginScreen), findsOneWidget);
-      // B's owner cannot log into A.
-      await login(tester, 'owner2', 'Branch@2026');
-      expect(find.text(en.loginInvalidCredentialsMessage), findsOneWidget);
-      await tester.pump(const Duration(seconds: 5));
-      await settle(tester, 4);
+      // B's owner is not an account of A: it is not offered.
+      await tap(tester, find.byKey(const ValueKey('loginUserPicker')), rounds: 4);
+      expect(find.text('owner2'), findsNothing);
+      await tap(tester, find.text('admin').last, rounds: 4);
       await login(tester, 'admin', _adminNewPassword);
       expect(find.byType(DashboardScreen), findsOneWidget);
       expect(companyPillName(tester), shopA);

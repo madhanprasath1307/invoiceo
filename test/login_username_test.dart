@@ -124,10 +124,13 @@ void main() {
       });
     }
 
-    String usernameText(WidgetTester tester) => tester
-        .widget<TextField>(find.byType(TextField).first)
-        .controller!
-        .text;
+    // The username is a pick-only drop-down; its current choice ('' = none).
+    String usernameText(WidgetTester tester) =>
+        tester
+            .widget<DropdownButtonFormField<String>>(
+                find.byKey(const ValueKey('loginUserPicker')))
+            .initialValue ??
+        '';
 
     testWidgets('lists every account, sorted, and picking one fills the field',
         (tester) async {
@@ -139,7 +142,8 @@ void main() {
       await tester.pumpAndSettle();
 
       final names = tester
-          .widgetList<PopupMenuItem<String>>(find.byType(PopupMenuItem<String>))
+          .widgetList<DropdownMenuItem<String>>(
+              find.byType(DropdownMenuItem<String>))
           .map((i) => i.value)
           .toList();
       expect(names, ['admin', 'Ravi', 'sita']);
@@ -160,6 +164,40 @@ void main() {
       await seedShop(tester, lastUser: 'deleted-user');
       await pumpLogin(tester);
       expect(usernameText(tester), isEmpty);
+    });
+
+    testWidgets('typing is not possible: the username is pick-only',
+        (tester) async {
+      await seedShop(tester);
+      await pumpLogin(tester);
+      // Only the password is a text box; the username is a drop-down.
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byKey(const ValueKey('loginUserPicker')), findsOneWidget);
+    });
+
+    testWidgets('the manage-companies button shows a company icon and its name, not a gear',
+        (tester) async {
+      await seedShop(tester);
+      await pumpLogin(tester);
+      // TextButton.icon builds a private subclass of TextButton, so match by "is a".
+      final btn = find.ancestor(
+          of: find.text('Manage companies'),
+          matching: find.byWidgetPredicate((w) => w is TextButton));
+      expect(btn, findsOneWidget);
+      expect(
+          find.descendant(of: btn, matching: find.byIcon(Icons.corporate_fare)),
+          findsOneWidget);
+      expect(find.byIcon(Icons.settings), findsNothing);
+    });
+
+    testWidgets('a single account is chosen for you', (tester) async {
+      await freshDb(tester);
+      await tester.runAsync(() async {
+        final admin = await UserService.getUserByUsername('admin');
+        await UserService.updatePassword(admin!.id, 'owner-pass-1');
+      });
+      await pumpLogin(tester);
+      expect(usernameText(tester), 'admin');
     });
 
     testWidgets('while admin/admin still works, the first-run hint wins',

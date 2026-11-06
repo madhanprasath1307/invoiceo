@@ -1321,6 +1321,21 @@ class AppLocalizationsTa extends AppLocalizations {
   }
 
   @override
+  String createInvoiceUpdatedHeadline(String invoiceTypeLabel) {
+    return '$invoiceTypeLabel வெற்றிகரமாகப் புதுப்பிக்கப்பட்டது!';
+  }
+
+  @override
+  String createInvoiceUpdatedTitleShort(String invoiceTypeLabel) {
+    return '$invoiceTypeLabel புதுப்பிக்கப்பட்டது';
+  }
+
+  @override
+  String mSuccessUpdatedSubtitle(String type) {
+    return '$type இல் செய்த மாற்றங்கள் சேமிக்கப்பட்டன.';
+  }
+
+  @override
   String createInvoiceCreatedHeadline(String invoiceTypeLabel) {
     return '$invoiceTypeLabel வெற்றிகரமாக உருவாக்கப்பட்டது!';
   }
