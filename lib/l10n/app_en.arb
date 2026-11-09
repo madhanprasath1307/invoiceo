@@ -3719,5 +3719,45 @@
   "backupFormatDatabase": "Database",
   "@backupFormatDatabase": {
     "description": "Settings > Backup list: small badge on a full database backup file (.invoicedb)"
+  },
+  "resetPasswordIntro": "Forgot your password? Support will give you a code that lets you set a new one. It takes 3 steps.",
+  "@resetPasswordIntro": {
+    "description": "Forgot password page: first line under the title"
+  },
+  "resetPasswordStep1Title": "Send support your Installation ID and username",
+  "@resetPasswordStep1Title": {
+    "description": "Forgot password page, step 1 heading"
+  },
+  "resetPasswordStep1Body": "Copy the Installation ID below and send it, with the username you log in with, through the support form. The code works only for that username.",
+  "@resetPasswordStep1Body": {
+    "description": "Forgot password page, step 1 text"
+  },
+  "resetPasswordSupportButton": "Open the support form",
+  "@resetPasswordSupportButton": {
+    "description": "Forgot password page: opens the support form in the browser"
+  },
+  "resetPasswordStep2Title": "Wait for your Response Code",
+  "@resetPasswordStep2Title": {
+    "description": "Forgot password page, step 2 heading"
+  },
+  "resetPasswordStep2Body": "Support replies by email or WhatsApp with a Response Code. The code works for about 3 days.",
+  "@resetPasswordStep2Body": {
+    "description": "Forgot password page, step 2 text"
+  },
+  "resetPasswordStep3Title": "Enter your username and the code here",
+  "@resetPasswordStep3Title": {
+    "description": "Forgot password page, step 3 heading"
+  },
+  "resetPasswordUsernameHelp": "Not sure of your username? Go back to the login screen: it is in the Username list.",
+  "@resetPasswordUsernameHelp": {
+    "description": "Forgot password page: help under the step 3 heading"
+  },
+  "changePasswordSkipButton": "Skip for now",
+  "@changePasswordSkipButton": {
+    "description": "Change Password Required page: lets the person continue without changing the password yet"
+  },
+  "changePasswordSkipHint": "You can change it later from your user menu. We will ask again the next time you log in.",
+  "@changePasswordSkipHint": {
+    "description": "Change Password Required page: small note under the Skip button"
   }
 }

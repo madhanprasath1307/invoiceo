@@ -301,6 +301,9 @@ void main() {
       final pass = tester.widget<TextField>(field(TextField, en.loginPasswordLabel));
       expect(user, 'admin');
       expect(pass.controller!.text, 'admin');
+      expect(pass.obscureText, isFalse, reason: 'the default password is shown in plain letters at first');
+      // A language button sits at the top right of the login page.
+      expect(find.byKey(const ValueKey('languageMenuButton')), findsOneWidget);
       // Only one company: no picker on the login card.
       expect(find.text(en.loginCompanySelectorLabel), findsNothing);
 

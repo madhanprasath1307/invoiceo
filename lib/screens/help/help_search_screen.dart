@@ -1,13 +1,12 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:invoiceo/common/app_config.dart';
 import 'package:invoiceo/common/constants.dart';
 import 'package:invoiceo/l10n/app_localizations.dart';
 import 'package:invoiceo/services/help_search/help_search_service.dart';
 import 'package:invoiceo/services/help_search/highlight_util.dart';
 import 'package:invoiceo/services/help_search/searchable_item.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:invoiceo/utils/contact_support.dart';
 
 /// Opens the Help & Settings search as a centered popup dialog.
 Future<void> showHelpSearchDialog(BuildContext context) {
@@ -16,21 +15,6 @@ Future<void> showHelpSearchDialog(BuildContext context) {
     barrierDismissible: true,
     builder: (context) => const _HelpSearchDialog(),
   );
-}
-
-/// Opens the support form, which asks for what we need to help (app
-/// version, computer, what went wrong). Falls back to email when no browser
-/// can be opened.
-Future<void> _contactSupport() async {
-  var opened = false;
-  try {
-    opened = await launchUrl(Uri.parse(AppConfig.supportForm),
-        mode: LaunchMode.externalApplication);
-  } catch (_) {}
-  if (!opened) {
-    await launchUrl(Uri(scheme: 'mailto', path: AppConfig.supportEmail),
-        mode: LaunchMode.externalApplication);
-  }
 }
 
 class _HelpSearchDialog extends StatelessWidget {
@@ -172,7 +156,7 @@ class _HelpSearchScreenState extends State<HelpSearchScreen> {
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: _contactSupport,
+                  onPressed: contactSupport,
                   icon: const Icon(Icons.support_agent_outlined, size: 18),
                   label: Text(l10n.helpContactSupportButton),
                 ),
@@ -238,7 +222,7 @@ class _HelpSearchScreenState extends State<HelpSearchScreen> {
                         text: l10n.helpNoMatchPrompt,
                         colors: colors,
                         actionLabel: l10n.helpContactSupportButton,
-                        onAction: _contactSupport,
+                        onAction: contactSupport,
                       );
               },
             ),

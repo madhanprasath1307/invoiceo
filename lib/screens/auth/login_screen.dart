@@ -23,6 +23,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:invoiceo/providers/app_config_provider.dart';
 import 'package:invoiceo/utils/post_auth_navigation.dart';
 import 'package:invoiceo/utils/window_title.dart';
+import 'package:invoiceo/widgets/language_picker.dart';
 import 'package:invoiceo/theme/brand_colors.dart';
 
 // Login Screen
@@ -136,7 +137,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!mounted) return;
     _usernameController.clear();
     _passwordController.clear();
-    setState(() => _showDefaultCredsHint = false);
+    setState(() {
+      _showDefaultCredsHint = false;
+      _obscurePassword = true;
+    });
     await _loadCompanies();
     await _checkFirstTimeUser();
     await _loadUsernames();
@@ -151,7 +155,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!mounted || user == null) return;
     _usernameController.text = 'admin';
     _passwordController.text = 'admin';
-    setState(() => _showDefaultCredsHint = true);
+    // The default login is shown in plain letters, so a first-time user sees what is filled in.
+    setState(() {
+      _showDefaultCredsHint = true;
+      _obscurePassword = false;
+    });
   }
 
   @override
@@ -558,6 +566,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
+          ),
+          // Language, top right: the first thing a new person may need to change.
+          const Positioned(
+            right: 12,
+            top: 12,
+            child: SafeArea(child: LanguageMenuButton()),
           ),
           if (!cfg.isCloud)
             Positioned(

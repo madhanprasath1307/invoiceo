@@ -5835,4 +5835,41 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get backupFormatDatabase => 'தரவுத்தளம்';
+
+  @override
+  String get resetPasswordIntro =>
+      'கடவுச்சொல் மறந்துவிட்டதா? புதிய கடவுச்சொல்லை அமைக்க ஆதரவுக் குழு ஒரு குறியீடு தரும். இதற்கு 3 படிகள் மட்டுமே.';
+
+  @override
+  String get resetPasswordStep1Title =>
+      'நிறுவல் ID-யையும் பயனர்பெயரையும் ஆதரவுக் குழுவுக்கு அனுப்புங்கள்';
+
+  @override
+  String get resetPasswordStep1Body =>
+      'கீழே உள்ள நிறுவல் ID-யை நகலெடுத்து, நீங்கள் உள்நுழையும் பயனர்பெயருடன் ஆதரவுப் படிவத்தில் அனுப்புங்கள். அந்தக் குறியீடு அந்தப் பயனர்பெயருக்கு மட்டுமே வேலை செய்யும்.';
+
+  @override
+  String get resetPasswordSupportButton => 'ஆதரவுப் படிவத்தைத் திறக்கவும்';
+
+  @override
+  String get resetPasswordStep2Title => 'பதில் குறியீட்டுக்காகக் காத்திருங்கள்';
+
+  @override
+  String get resetPasswordStep2Body =>
+      'ஆதரவுக் குழு மின்னஞ்சல் அல்லது வாட்ஸ்அப்பில் பதில் குறியீட்டை அனுப்பும். அந்தக் குறியீடு சுமார் 3 நாட்கள் வேலை செய்யும்.';
+
+  @override
+  String get resetPasswordStep3Title =>
+      'பயனர்பெயரையும் குறியீட்டையும் இங்கே உள்ளிடுங்கள்';
+
+  @override
+  String get resetPasswordUsernameHelp =>
+      'பயனர்பெயர் நினைவில்லையா? உள்நுழைவுத் திரைக்குச் சென்று, பயனர்பெயர் பட்டியலில் பாருங்கள்.';
+
+  @override
+  String get changePasswordSkipButton => 'இப்போது தவிர்க்கவும்';
+
+  @override
+  String get changePasswordSkipHint =>
+      'பின்னர் உங்கள் பயனர் மெனுவில் இருந்து மாற்றலாம். அடுத்த முறை உள்நுழையும்போது மீண்டும் கேட்போம்.';
 }

@@ -9607,6 +9607,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Database'**
   String get backupFormatDatabase;
+
+  /// Forgot password page: first line under the title
+  ///
+  /// In en, this message translates to:
+  /// **'Forgot your password? Support will give you a code that lets you set a new one. It takes 3 steps.'**
+  String get resetPasswordIntro;
+
+  /// Forgot password page, step 1 heading
+  ///
+  /// In en, this message translates to:
+  /// **'Send support your Installation ID and username'**
+  String get resetPasswordStep1Title;
+
+  /// Forgot password page, step 1 text
+  ///
+  /// In en, this message translates to:
+  /// **'Copy the Installation ID below and send it, with the username you log in with, through the support form. The code works only for that username.'**
+  String get resetPasswordStep1Body;
+
+  /// Forgot password page: opens the support form in the browser
+  ///
+  /// In en, this message translates to:
+  /// **'Open the support form'**
+  String get resetPasswordSupportButton;
+
+  /// Forgot password page, step 2 heading
+  ///
+  /// In en, this message translates to:
+  /// **'Wait for your Response Code'**
+  String get resetPasswordStep2Title;
+
+  /// Forgot password page, step 2 text
+  ///
+  /// In en, this message translates to:
+  /// **'Support replies by email or WhatsApp with a Response Code. The code works for about 3 days.'**
+  String get resetPasswordStep2Body;
+
+  /// Forgot password page, step 3 heading
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your username and the code here'**
+  String get resetPasswordStep3Title;
+
+  /// Forgot password page: help under the step 3 heading
+  ///
+  /// In en, this message translates to:
+  /// **'Not sure of your username? Go back to the login screen: it is in the Username list.'**
+  String get resetPasswordUsernameHelp;
+
+  /// Change Password Required page: lets the person continue without changing the password yet
+  ///
+  /// In en, this message translates to:
+  /// **'Skip for now'**
+  String get changePasswordSkipButton;
+
+  /// Change Password Required page: small note under the Skip button
+  ///
+  /// In en, this message translates to:
+  /// **'You can change it later from your user menu. We will ask again the next time you log in.'**
+  String get changePasswordSkipHint;
 }
 
 class _AppLocalizationsDelegate

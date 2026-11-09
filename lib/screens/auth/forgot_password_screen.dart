@@ -5,14 +5,17 @@ import 'package:invoiceo/common/constants.dart';
 import 'package:invoiceo/l10n/app_localizations.dart';
 import 'package:invoiceo/providers/repositories.dart';
 import 'package:invoiceo/services/backend_services.dart';
+import 'package:invoiceo/utils/contact_support.dart';
 import 'package:invoiceo/utils/reset_code_verifier.dart';
 import 'package:invoiceo/theme/brand_colors.dart';
+import 'package:invoiceo/widgets/language_picker.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() =>
+      _ForgotPasswordScreenState();
 }
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
@@ -153,8 +156,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      await ref.read(authRepositoryProvider).updatePassword(_verifiedUserId!, newPassword);
-      await ref.read(authRepositoryProvider).markPasswordChanged(_verifiedUserId!);
+      await ref
+          .read(authRepositoryProvider)
+          .updatePassword(_verifiedUserId!, newPassword);
+      await ref
+          .read(authRepositoryProvider)
+          .markPasswordChanged(_verifiedUserId!);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -187,201 +194,277 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       backgroundColor: Theme.of(context).brightness == Brightness.dark
           ? null
           : BrandColors.primarySoft,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            child: Card(
-          elevation: 8,
-          color: Theme.of(context).colorScheme.surfaceContainer,
-          child: Container(
-            width: cardWidth,
-            padding: EdgeInsets.all(cardPadding),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.password_outlined,
-                      color: Theme.of(context).primaryColor,
-                      size: 32,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        l10n.resetPasswordTitle,
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-
-                if (_verifiedUserId == null) ...[
-                  // Support signs the code for one username, so they need it
-                  // along with the Installation ID.
-                  Text(
-                    l10n.resetPasswordInstructions,
-                    style: const TextStyle(fontSize: 13),
-                  ),
-
-                  AppSpacing.hMedium,
-
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                // Room above the card for the language button in the top corner.
+                padding: const EdgeInsets.fromLTRB(16, 56, 16, 24),
+                child: Card(
+                  elevation: 8,
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  child: Container(
+                    width: cardWidth,
+                    padding: EdgeInsets.all(cardPadding),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            _installationId ?? l10n.resetPasswordLoadingLabel,
-                            style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-                          ),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.password_outlined,
+                              color: Theme.of(context).primaryColor,
+                              size: 32,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                l10n.resetPasswordTitle,
+                                style: const TextStyle(
+                                    fontSize: 20, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.copy, size: 18),
-                          tooltip: l10n.resetPasswordCopyIdTooltip,
-                          onPressed: _installationId == null ? null : _copyInstallationId,
+                        if (_verifiedUserId == null) ...[
+                          AppSpacing.hSmall,
+                          Text(l10n.resetPasswordIntro,
+                              style: const TextStyle(fontSize: 13.5)),
+                          AppSpacing.hLarge,
+
+                          // Step 1: what to send. Support signs the code for one
+                          // username, so they need it with the Installation ID.
+                          _step(1, l10n.resetPasswordStep1Title,
+                              l10n.resetPasswordStep1Body),
+                          AppSpacing.hSmall,
+                          Container(
+                            padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: SelectableText(
+                                    _installationId ??
+                                        l10n.resetPasswordLoadingLabel,
+                                    style: const TextStyle(
+                                        fontFamily: 'monospace', fontSize: 13),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.copy, size: 18),
+                                  tooltip: l10n.resetPasswordCopyIdTooltip,
+                                  onPressed: _installationId == null
+                                      ? null
+                                      : _copyInstallationId,
+                                ),
+                              ],
+                            ),
+                          ),
+                          AppSpacing.hSmall,
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: OutlinedButton.icon(
+                              key: const ValueKey('resetOpenSupport'),
+                              onPressed: contactSupport,
+                              icon: const Icon(Icons.support_agent, size: 18),
+                              label: Text(l10n.resetPasswordSupportButton),
+                            ),
+                          ),
+
+                          AppSpacing.hLarge,
+                          _step(2, l10n.resetPasswordStep2Title,
+                              l10n.resetPasswordStep2Body),
+                          AppSpacing.hLarge,
+                          _step(3, l10n.resetPasswordStep3Title,
+                              l10n.resetPasswordUsernameHelp),
+
+                          AppSpacing.hMedium,
+
+                          if (_codeJustVerified)
+                            _buildSuccessBox(l10n.resetPasswordVerifiedMessage)
+                          else ...[
+                            if (_companyName != null &&
+                                _companyName!.isNotEmpty) ...[
+                              Text(
+                                l10n.resetPasswordCompanyLabel(_companyName!),
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant),
+                              ),
+                              AppSpacing.hSmall,
+                            ],
+                            TextField(
+                              controller: _usernameController,
+                              decoration: InputDecoration(
+                                labelText: l10n.loginUsernameLabel,
+                                prefixIcon: const Icon(Icons.person),
+                                border: const OutlineInputBorder(),
+                              ),
+                            ),
+                            AppSpacing.hMedium,
+                            TextField(
+                              controller: _responseCodeController,
+                              decoration: InputDecoration(
+                                labelText: l10n.resetPasswordResponseCodeLabel,
+                                prefixIcon: const Icon(Icons.vpn_key_outlined),
+                                border: const OutlineInputBorder(),
+                              ),
+                            ),
+                            if (_errorMessage != null) ...[
+                              AppSpacing.hMedium,
+                              _buildErrorBox(_errorMessage!),
+                            ],
+                            AppSpacing.hXlarge,
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _isVerifying ? null : _verifyCode,
+                                style: ElevatedButton.styleFrom(
+                                  minimumSize: const Size(double.infinity, 50),
+                                  backgroundColor:
+                                      Theme.of(context).primaryColor,
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: _isVerifying
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : Text(l10n.resetPasswordVerifyButton),
+                              ),
+                            ),
+                          ],
+                        ] else ...[
+                          _buildSuccessBox(l10n.resetPasswordVerifiedMessage),
+                          AppSpacing.hMedium,
+                          TextField(
+                            controller: _newPasswordController,
+                            obscureText: _obscurePassword,
+                            decoration: InputDecoration(
+                              labelText: l10n.changePasswordNewPasswordLabel,
+                              prefixIcon: const Icon(Icons.lock),
+                              border: const OutlineInputBorder(),
+                              suffixIcon: IconButton(
+                                icon: Icon(_obscurePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined),
+                                onPressed: () => setState(
+                                    () => _obscurePassword = !_obscurePassword),
+                              ),
+                            ),
+                          ),
+                          AppSpacing.hMedium,
+                          TextField(
+                            controller: _confirmPasswordController,
+                            obscureText: _obscurePassword,
+                            decoration: InputDecoration(
+                              labelText: l10n.userMgmtConfirmNewPasswordLabel,
+                              prefixIcon: const Icon(Icons.lock),
+                              border: const OutlineInputBorder(),
+                            ),
+                          ),
+                          if (_errorMessage != null) ...[
+                            AppSpacing.hMedium,
+                            _buildErrorBox(_errorMessage!),
+                          ],
+                          AppSpacing.hXlarge,
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed:
+                                  _isSubmitting ? null : _submitNewPassword,
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size(double.infinity, 50),
+                                backgroundColor: Theme.of(context).primaryColor,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: _isSubmitting
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Text(l10n.resetPasswordSetButton),
+                            ),
+                          ),
+                        ],
+                        AppSpacing.hMedium,
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text(l10n.resetPasswordBackToLoginButton),
+                          ),
                         ),
                       ],
                     ),
                   ),
-
-                  AppSpacing.hXlarge,
-
-                  if (_codeJustVerified)
-                    _buildSuccessBox(l10n.resetPasswordVerifiedMessage)
-                  else ...[
-                    if (_companyName != null && _companyName!.isNotEmpty) ...[
-                      Text(
-                        l10n.resetPasswordCompanyLabel(_companyName!),
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant),
-                      ),
-                      AppSpacing.hSmall,
-                    ],
-                    TextField(
-                      controller: _usernameController,
-                      decoration: InputDecoration(
-                        labelText: l10n.loginUsernameLabel,
-                        prefixIcon: const Icon(Icons.person),
-                        border: const OutlineInputBorder(),
-                      ),
-                    ),
-                    AppSpacing.hMedium,
-                    TextField(
-                      controller: _responseCodeController,
-                      decoration: InputDecoration(
-                        labelText: l10n.resetPasswordResponseCodeLabel,
-                        prefixIcon: const Icon(Icons.vpn_key_outlined),
-                        border: const OutlineInputBorder(),
-                      ),
-                    ),
-                    if (_errorMessage != null) ...[
-                      AppSpacing.hMedium,
-                      _buildErrorBox(_errorMessage!),
-                    ],
-                    AppSpacing.hXlarge,
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isVerifying ? null : _verifyCode,
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 50),
-                          backgroundColor: Theme.of(context).primaryColor,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: _isVerifying
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(l10n.resetPasswordVerifyButton),
-                      ),
-                    ),
-                  ],
-                ] else ...[
-                  _buildSuccessBox(l10n.resetPasswordVerifiedMessage),
-                  AppSpacing.hMedium,
-                  TextField(
-                    controller: _newPasswordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: l10n.changePasswordNewPasswordLabel,
-                      prefixIcon: const Icon(Icons.lock),
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined),
-                        onPressed: () =>
-                            setState(() => _obscurePassword = !_obscurePassword),
-                      ),
-                    ),
-                  ),
-                  AppSpacing.hMedium,
-                  TextField(
-                    controller: _confirmPasswordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: l10n.userMgmtConfirmNewPasswordLabel,
-                      prefixIcon: const Icon(Icons.lock),
-                      border: const OutlineInputBorder(),
-                    ),
-                  ),
-                  if (_errorMessage != null) ...[
-                    AppSpacing.hMedium,
-                    _buildErrorBox(_errorMessage!),
-                  ],
-                  AppSpacing.hXlarge,
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isSubmitting ? null : _submitNewPassword,
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 50),
-                        backgroundColor: Theme.of(context).primaryColor,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Text(l10n.resetPasswordSetButton),
-                    ),
-                  ),
-                ],
-
-                AppSpacing.hMedium,
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(l10n.resetPasswordBackToLoginButton),
-                  ),
                 ),
-              ],
+              ),
             ),
           ),
+          // Language, top right (same button as on the login page).
+          const Positioned(
+            right: 12,
+            top: 12,
+            child: SafeArea(child: LanguageMenuButton()),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One numbered step of the reset: a round number, a bold heading and a short line under it.
+  Widget _step(int number, String title, String body) {
+    final primary = Theme.of(context).primaryColor;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: primary, shape: BoxShape.circle),
+          child: Text('$number',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold)),
         ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 2),
+              Text(body,
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ],
           ),
         ),
-      ),
+      ],
     );
   }
 

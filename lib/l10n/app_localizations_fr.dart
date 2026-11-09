@@ -5799,4 +5799,40 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get backupFormatDatabase => 'Base de données';
+
+  @override
+  String get resetPasswordIntro =>
+      'Forgot your password? Support will give you a code that lets you set a new one. It takes 3 steps.';
+
+  @override
+  String get resetPasswordStep1Title =>
+      'Send support your Installation ID and username';
+
+  @override
+  String get resetPasswordStep1Body =>
+      'Copy the Installation ID below and send it, with the username you log in with, through the support form. The code works only for that username.';
+
+  @override
+  String get resetPasswordSupportButton => 'Open the support form';
+
+  @override
+  String get resetPasswordStep2Title => 'Wait for your Response Code';
+
+  @override
+  String get resetPasswordStep2Body =>
+      'Support replies by email or WhatsApp with a Response Code. The code works for about 3 days.';
+
+  @override
+  String get resetPasswordStep3Title => 'Enter your username and the code here';
+
+  @override
+  String get resetPasswordUsernameHelp =>
+      'Not sure of your username? Go back to the login screen: it is in the Username list.';
+
+  @override
+  String get changePasswordSkipButton => 'Skip for now';
+
+  @override
+  String get changePasswordSkipHint =>
+      'You can change it later from your user menu. We will ask again the next time you log in.';
 }

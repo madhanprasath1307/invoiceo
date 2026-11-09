@@ -122,6 +122,11 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     }
   }
 
+  /// "Skip for now": go on into the app without a new password.
+  Future<void> _skip() async {
+    await navigateAfterAuth(context, ref, widget.user);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -155,6 +160,16 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                   children: [
                     Row(
                       children: [
+                        // Opened from the user menu: a way back to where the person was.
+                        if (!widget.forced) ...[
+                          IconButton(
+                            key: const ValueKey('changePasswordBack'),
+                            icon: const Icon(Icons.arrow_back),
+                            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                            onPressed: _isLoading ? null : () => Navigator.of(context).maybePop(),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
                         Icon(
                           Icons.lock_reset,
                           color: Theme.of(context).primaryColor,
@@ -332,6 +347,34 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                             : Text(l10n.userMgmtChangePasswordTitle),
                       ),
                     ),
+
+                    // Only on the forced screen: carry on with the password as it is. The account is still marked
+                    // as not changed, so this page comes back at the next login.
+                    if (widget.forced) ...[
+                      AppSpacing.hMedium,
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          key: const ValueKey('skipChangePassword'),
+                          onPressed: _isLoading ? null : _skip,
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 50),
+                            foregroundColor: Theme.of(context).primaryColor,
+                            side: BorderSide(color: Theme.of(context).primaryColor),
+                          ),
+                          child: Text(l10n.changePasswordSkipButton),
+                        ),
+                      ),
+                      AppSpacing.hSmall,
+                      Center(
+                        child: Text(
+                          l10n.changePasswordSkipHint,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

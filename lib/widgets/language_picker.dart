@@ -110,3 +110,50 @@ class LanguagePicker extends ConsumerWidget {
     );
   }
 }
+
+/// A labelled language button for the top corner of the sign-in pages: a globe, the name of the current
+/// language in its own script, and a small arrow. Opens the same list as [LanguagePicker].
+class LanguageMenuButton extends ConsumerWidget {
+  const LanguageMenuButton({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(localeProvider);
+    final l10n = AppLocalizations.of(context)!;
+    final color = Theme.of(context).colorScheme.primary;
+    return PopupMenuButton<Locale>(
+      key: const ValueKey('languageMenuButton'),
+      tooltip: l10n.commonLanguage,
+      onSelected: (locale) async {
+        applyAppLocale(ref, locale);
+        await ref.read(settingsRepositoryProvider).setAppLocale(localeToKey(locale));
+      },
+      itemBuilder: (context) => [
+        for (final locale in supportedAppLocales)
+          PopupMenuItem(
+            value: locale,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(appLanguageLabel(locale)),
+                if (locale.languageCode != 'en') ...[const SizedBox(width: 6), const BetaBadge()],
+              ],
+            ),
+          ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.language, size: 20, color: color),
+            const SizedBox(width: 6),
+            Text(appLanguageLabel(selected),
+                style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+            Icon(Icons.arrow_drop_down, color: color),
+          ],
+        ),
+      ),
+    );
+  }
+}
