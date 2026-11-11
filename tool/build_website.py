@@ -383,10 +383,11 @@ def header(active, home=False, base=False, lang='en'):
     <nav class="nav" aria-label="{words['main']}">{nav}</nav>
     <div class="header-actions">
       {switch}
+      {btn(words['cust'], 'customization.html', 'secondary', '', 'sliders', cls='header-cta-2', attrs=' aria-current="page"' if active == 'customization' else '')}
       {btn(words['dl'], dl_href, 'primary', '', 'download', cls='header-cta', attrs=' aria-current="page"' if active == 'download' else '')}
       <button class="menu-toggle" type="button" aria-controls="site-nav" aria-expanded="false" aria-label="{words['menu']}">{icon('menu')}</button>
     </div>
-    <nav class="mobile-nav" id="site-nav" aria-label="{words['main_menu']}">{mobile}{btn(words['dl'], dl_href, 'primary', 'lg', 'download', block=True)}</nav>
+    <nav class="mobile-nav" id="site-nav" aria-label="{words['main_menu']}">{mobile}{btn(words['cust'], 'customization.html', 'secondary', 'lg', 'sliders', block=True)}{btn(words['dl'], dl_href, 'primary', 'lg', 'download', block=True)}</nav>
   </div>
 </header>'''
 
@@ -1210,6 +1211,19 @@ customization_body = page_head(
     'Custom features', 'Customization',
     f'{NAME} is free to use. When your business needs something more, we can build it for you. Every request is quoted on its own, and you decide before any work starts. See <a href="reviews.html">a custom bill we built</a>.', byline()) + f'''
 
+<section class="page-body" id="request" aria-labelledby="request-title">
+  <div class="wrap narrow">
+    {section_head('Request', 'Request a customization', 'Prices depend on the work, so we do not list fixed prices. You will always see the quote first.', 'request-title')}
+    <p class="center mt-2" data-block>{btn('Open the form in a new tab', '#', 'secondary', '', 'external-link', attrs=' data-href="forms.customization" data-hide-empty target="_blank" rel="noopener"')}</p>
+    <iframe id="customization-form" class="form-frame hidden mt-3" title="Customization request form" loading="lazy"></iframe>
+    <div id="customization-form-missing" class="form-missing mt-3">
+      <p><b>The request form is not shown on this page.</b></p>
+      <p>Open it in a new tab with the button above, or write to us at <a href="mailto:{EMAIL}?subject=Customization%20request">{EMAIL}</a><span data-block> or message us on <a data-whatsapp target="_blank" rel="noopener">WhatsApp</a></span>.</p>
+    </div>
+    <p class="center small mt-3">Questions first? Read the <a href="faq.html#help-and-custom-work">answers about custom work</a> or see <a href="contact.html">all the ways to contact us</a>.</p>
+  </div>
+</section>
+
 <section class="page-body" aria-labelledby="what-title">
   <div class="wrap">
     {section_head('What we can make', 'Made for your business', 'A few examples. If your idea is not on the list, ask anyway. '
@@ -1228,20 +1242,6 @@ customization_body = page_head(
   <div class="wrap">
     {section_head('How it works', 'Three steps, and you decide', hid='custom-how')}
     <ol class="steps-row steps-3 mt-4">{''.join(f'<li><span class="step-label">{tile(ic, "", "sm")}Step {n + 1}</span><h3 class="h4">{t}</h3><p>{b}</p></li>' for n, (ic, t, b) in enumerate(CUSTOM_STEPS))}</ol>
-  </div>
-</section>
-
-<section class="section section-flush" id="request" aria-labelledby="request-title">
-  <div class="wrap narrow">
-    {section_head('Request', 'Request a customization', 'Prices depend on the work, so we do not list fixed prices. You will always see the quote first.', 'request-title')}
-    <p class="center mt-2" data-block>{btn('Open the form in a new tab', '#', 'secondary', '', 'external-link', attrs=' data-href="forms.customization" data-hide-empty target="_blank" rel="noopener"')}</p>
-    <div id="customization-form-gate" class="form-gate hidden mt-3"><p>The form is a Google Form. Showing it here lets Google load content and set cookies, so it only loads when you ask.</p><button type="button" class="btn btn-secondary">Show the form on this page</button></div>
-    <iframe id="customization-form" class="form-frame hidden mt-3" title="Customization request form" loading="lazy"></iframe>
-    <div id="customization-form-missing" class="form-missing mt-3">
-      <p><b>The request form is not shown on this page.</b></p>
-      <p>Open it in a new tab with the button above, or write to us at <a href="mailto:{EMAIL}?subject=Customization%20request">{EMAIL}</a><span data-block> or message us on <a data-whatsapp target="_blank" rel="noopener">WhatsApp</a></span>.</p>
-    </div>
-    <p class="center small mt-3">Questions first? Read the <a href="faq.html#help-and-custom-work">answers about custom work</a> or see <a href="contact.html">all the ways to contact us</a>.</p>
   </div>
 </section>'''
 
@@ -1841,7 +1841,7 @@ privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {date_tag(RE
     <ul>
       <li><b>Hosting.</b> This site is hosted on GitHub Pages. GitHub may record technical information such as your IP address when you visit, as described in the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener">GitHub Privacy Statement</a>. Installers are downloaded from GitHub as well.</li>
       <li><b>Fonts.</b> The text font (Manrope), the heading font (Fraunces), and Noto Sans Tamil or Noto Sans Devanagari on the Tamil and Hindi pages, are hosted on this website. Your browser does not contact Google to load them.</li>
-      <li><b>Forms.</b> Our support, customization and feedback forms are Google Forms. What you type into them (such as your name, email, phone number and message) is sent to our Google account so that we can reply. Google’s handling of it is described in the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>. The customization page can show its form on the page, but only after you press “Show the form on this page”; until then nothing from Google is loaded there.</li>
+      <li><b>Forms.</b> Our support, customization and feedback forms are Google Forms. What you type into them (such as your name, email, phone number and message) is sent to our Google account so that we can reply. Google’s handling of it is described in the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>. The customization page shows its form on the page, so opening that page loads content from Google, which may set cookies. If you would rather not, the other pages only link to the forms and load nothing from Google until you open one.</li>
       {ANALYTICS_BULLET}
       <li><b>Email and WhatsApp.</b> If you contact us, we keep the conversation so that we can help you and follow up.</li>
     </ul>

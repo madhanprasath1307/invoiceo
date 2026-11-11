@@ -198,7 +198,7 @@ code {
 .menu-toggle svg { width: 22px; height: 22px; }
 .mobile-nav { display: none; }
 @media (max-width: 900px) {
-  .nav, .gh-link, .header-cta { display: none !important; }
+  .nav, .gh-link, .header-cta, .header-cta-2 { display: none !important; }
   .menu-toggle { display: inline-flex; }
   .mobile-nav.open {
     display: flex; flex-direction: column; gap: 2px;
@@ -736,9 +736,23 @@ html[lang="ta"] .section-head h2, html[lang="hi"] .section-head h2 { font-size: 
 .nav a[aria-current="page"] { background: var(--brand-tint); color: var(--brand-dark); }
 .header-actions { margin-left: 0; gap: 8px; }
 .header-cta { min-height: 42px; padding: 9px 18px; border-radius: 13px; box-shadow: 0 8px 20px rgba(31, 111, 235, 0.30); }
+/* Customization, beside Download free: an outline button, so Download stays the main one */
+.nav a, .header-actions .btn, .lang-switch { white-space: nowrap; }
+.header-cta-2 { min-height: 42px; padding: 9px 16px; border-radius: 13px; font-size: 14.5px; }
+.header-cta-2 svg { width: 18px; height: 18px; }
+.header-cta-2:hover, .header-cta-2[aria-current="page"] { background: var(--brand-tint); border-color: var(--brand); color: var(--brand-dark); }
+/* A little less room on mid-size screens, so the bar never wraps */
+@media (max-width: 1320px) { .nav a { padding: 9px 10px; font-size: 14px; } .header-cta-2 { padding: 9px 13px; } .header-cta { padding: 9px 15px; } }
+/* Tamil and Hindi words are longer: no icon, and tighter buttons, between 1160 and 1320 px */
+@media (max-width: 1320px) {
+  html:not([lang="en"]) .header-cta-2 svg { display: none; }
+  html:not([lang="en"]) .header-cta-2, html:not([lang="en"]) .header-cta { padding: 9px 12px; font-size: 14px; }
+  html:not([lang="en"]) .lang-switch { padding: 0 10px; }
+  html:not([lang="en"]) .nav a { padding: 9px 8px; }
+}
 .lang-switch { min-height: 42px; padding: 0 12px; border-radius: 12px; font-size: 13.5px; }
-@media (max-width: 1120px) {
-  .nav, .gh-link, .header-cta { display: none !important; }
+@media (max-width: 1160px) {
+  .nav, .gh-link, .header-cta, .header-cta-2 { display: none !important; }
   .menu-toggle { display: inline-flex; margin-left: auto; }
   .header-actions { margin-left: auto; }
   .mobile-nav.open {
