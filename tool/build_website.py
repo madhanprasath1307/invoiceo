@@ -33,14 +33,16 @@ RELEASE_ISO = '2026-11-09'
 # RELEASE_ISO as their dateModified and sitemap <lastmod>. PAGE_UPDATED can give
 # a single page its own date. Privacy/terms keep their policy date (RELEASE_ISO).
 SITE_UPDATED_ISO = '2026-11-03'
+# The privacy policy's own "Last updated" date: set it whenever the policy text changes (here: the download form).
+PRIVACY_ISO = '2026-11-12'
 # The cookie box (Google Analytics only after Accept, a "Cookie settings" footer link and the matching Privacy wording).
 # The code stays in site.js. False = analytics runs for everyone, as before, and no box is shown. Set True to bring the box back,
 # then rebuild: this switches the box, the footer link and the Privacy text together. (Visitors from the EU/UK should be asked.)
 CONSENT_BANNER = False
 # Diwali 2026: banner, cracker bursts and the "make a wish" lantern (assets/js/diwali.js + assets/css/diwali.css).
 # The script switches itself off from 14 November 2026 (END in diwali.js); set False and rebuild to remove it from the pages.
-DIWALI = True
-PAGE_UPDATED = {}
+DIWALI = False
+PAGE_UPDATED = {'privacy.html': max(RELEASE_ISO, PRIVACY_ISO)}
 PAGE_MODIFIED = {}  # filled by page(): filename -> dateModified, reused by the sitemap
 COFFEE = 'https://buymeacoffee.com/madcreations'
 GH = 'https://github.com/Maddy-1303/invoiceo'
@@ -889,7 +891,7 @@ compare_home = section(
     + f'{tile("gift")}<h3>No invoice limit, no trial</h3><p>Some free plans allow only a few documents a month (for example 10), or are a 7-day trial. {NAME} has no limit and no end date, on as many computers as you like.</p></div>'
     + '<div class="card cmp-card">'
     + '<div class="art art-private" aria-hidden="true"><em class="no">Cloud</em><span class="dash"></span><em class="yes">Your PC</em></div>'
-    + f'{tile("lock")}<h3>Offline and private</h3><p>Your data stays on your computer. There is no sign-up and no cloud account, and it is open source, so anyone can check what it does.</p></div>'
+    + f'{tile("lock")}<h3>Offline and private</h3><p>Your data stays on your computer. There is no online account and no cloud, and it is open source, so anyone can check what it does.</p></div>'
     + '<div class="card cmp-card">'
     + '<div class="art art-world" aria-hidden="true"><em>₹</em><em>$</em><em>€</em><em>£</em><em class="tg">GST on / off<b></b></em></div>'
     + f'{tile("globe")}<h3>Works wherever you bill</h3><p>GST invoices, or turn GST off and bill in one of 156 currencies. Eight app languages, and A4 or 58/80 mm thermal printing, on Windows, macOS and Linux.</p></div>'
@@ -1105,7 +1107,7 @@ WINDOWS_GUIDE = f"""<section class="section section-subtle" id="windows-warning"
 """
 
 download_body = page_head(
-    'Download', f'Download {NAME}', 'Free for Windows, macOS and Linux. No sign-up, no licence key and no subscription. New here? <a href="how-it-works.html">See how it works</a>.',
+    'Download', f'Download {NAME}', 'Free for Windows, macOS and Linux. No account, no licence key and no subscription. New here? <a href="how-it-works.html">See how it works</a>.',
     f'\n    {byline()}<div class="badges">{badge("Version <span data-version>" + VERSION + "</span>", "brand")}'
     f'{badge("Released <span data-release-date>" + RELEASE_DATE + "</span>", "neutral")}</div>'
     f'\n    <p class="small"><a href="changelog.html">What’s new in this version</a></p>') + f'''
@@ -1139,7 +1141,7 @@ download_body = page_head(
 </section>'''
 
 page('download.html', f'Download {NAME} — free billing software for PC and Mac',
-     f'Download {NAME} free for Windows 10/11, macOS 12+ and Linux (.deb or AppImage). No sign-up or licence key, '
+     f'Download {NAME} free for Windows 10/11, macOS 12+ and Linux (.deb or AppImage). No account or licence key, '
      'with step-by-step install help for each system.',
      'download', download_body, crumb='Download')
 
@@ -1262,13 +1264,14 @@ FAQ_GROUPS = [
         ('Do I need an internet connection?',
          'No. Invoiceo runs on your computer, so you can bill, print and see reports offline. You need a connection only to download the installer, to open our website or forms, or to share a PDF online.'),
         ('Do I need to create an account?',
-         'No online account or sign-up is needed. The app has its own login on your computer, so you can protect it with a password and give each person their own username.'),
+         'No online account is needed. The app has its own login on your computer, so you can protect it with a password and give each person their own username. Before your first download the website asks for an email or phone number so that we can help you set it up; that is not an account, and nothing is needed to use the app.'),
         ('Where is my data stored?',
          ['Everything you enter is saved on your own computer, in the app’s data folder. Your customers, products and invoices are not sent to us.',
           'Because the data is on your computer, keeping it safe is in your hands: use <b>Settings → Backup</b> in the app regularly.']),
         ('Does Invoiceo collect any data?',
          ['Only a few anonymous usage counts, so we know how many people use the app: when it is first opened, once a day while it is used, and once when the first invoice is made. Each count carries a random ID (the same one on that computer), the app version and the operating system, nothing else.',
-          'Your customers, products, invoices, amounts and company details are never sent. You can turn the counts off in <b>Settings → Software Info</b>. See the <a href="privacy.html">privacy policy</a>.']),
+          'Your customers, products, invoices, amounts and company details are never sent. You can turn the counts off in <b>Settings → Software Info</b>.',
+          'Separately, the email or phone number you leave on this website before a download is kept only to help you set up and to share updates, and is removed when you ask. See the <a href="privacy.html">privacy policy</a>.']),
     ]),
     ('Billing and printing', [
         ('Can I use Invoiceo for GST billing?',
@@ -1315,7 +1318,7 @@ FAQ_GROUPS = [
         ('Can two computers use the same data?',
          'Not live. Each computer keeps its own data, and there is no sync between computers or a cloud version. The simplest setup is one main billing computer where everyone logs in with their own user. To move data to another computer, use <b>Settings → Backup</b>. Sharing data between computers can be looked at as <a href="customization.html">paid customization</a>.'),
         ('How is Invoiceo different from Vyapar, myBillBook or Tally?',
-         'Invoiceo is free with no limits, works fully offline, needs no sign-up and is open source. The others have more features, such as GST returns, e-invoicing and phone apps, but their free plans are limited or are trials. See the <a href="compare.html">side-by-side comparison</a>.'),
+         'Invoiceo is free with no limits, works fully offline, needs no account and is open source. The others have more features, such as GST returns, e-invoicing and phone apps, but their free plans are limited or are trials. See the <a href="compare.html">side-by-side comparison</a>.'),
     ]),
     ('Help and custom work', [
         ('Can you add a feature for my business?',
@@ -1469,7 +1472,7 @@ COMPARE_ROWS = [
     ('Works without internet',
      ['Yes, fully', 'Offline billing, then syncs to the cloud', 'Apps with real-time cloud sync', 'Yes', 'Yes']),
     ('Sign-up or account',
-     ['None', 'Phone number to download', 'Sign-up', 'Form for the free trial', 'Direct download, no sign-up']),
+     ['No account. An email or phone number to download', 'Phone number to download', 'Sign-up', 'Form for the free trial', 'Direct download, no sign-up']),
     ('Where your data is kept',
      ['Only on your computer', 'Your device, with cloud backup and sync', 'Cloud', 'Your computer', 'Your PC, with optional sync']),
     ('Open source',
@@ -1492,7 +1495,8 @@ COMPARE_ROWS = [
 COMPARE_TONES = [
     'ypppp',   # free plan
     'yppyy',   # works without internet
-    'yppyy',   # sign-up or account
+    'ppppy',   # sign-up or account (ours: no account, but an email or phone number before the download;
+               # Tally's form before the free trial is the same kind of step)
     'yppyy',   # where data is kept
     'ynnnn',   # open source
     'nyyxx',   # phone app
@@ -1502,7 +1506,7 @@ COMPARE_TONES = [
     'yyxxx',   # languages
 ]
 PICK_US = ['You want billing that is free for good, with no invoice cap and no trial that ends',
-           'You want your data on your own computer, with no sign-up and no cloud account',
+           'You want your data on your own computer, with no online account and no cloud',
            'You print on A4 or 58/80 mm thermal printers, or need Tamil or Hindi on your bills',
            'You want open-source software, or a small custom feature made for your business at a fair price']
 PICK_OTHER = ['You file GST returns from the software, or need e-invoice and e-way bill',
@@ -1524,7 +1528,7 @@ compare_tr = ''.join(
         for i, c in enumerate(cells)) + '</tr>'
     for ri, (t, cells) in enumerate(COMPARE_ROWS) if COMPARE_TONES[ri][0] == 'y')
 GLANCE = [('gift', 'No invoice limit', 'free, with no trial'), ('wifi-off', 'Works offline', 'no internet needed'),
-          ('lock', 'No sign-up', 'data stays on your PC'), ('code', 'Open source', 'MIT License')]
+          ('lock', 'No account', 'data stays on your PC'), ('code', 'Open source', 'MIT License')]
 glance = ('<div class="facts-strip compare-glance"><ul class="wrap facts facts-4">'
           + ''.join(f'<li class="fact">{tile(i, "teal", "md")}<div><b>{v}</b><span>{l}</span></div></li>' for i, v, l in GLANCE)
           + '</ul></div>')
@@ -1569,7 +1573,7 @@ compare_body = page_head('Compare', f'{NAME} compared with Vyapar, myBillBook, T
   <div class="wrap">
     <div class="cta-band">
       <h2 id="cmp-cta">Try it yourself. It is free.</h2>
-      <p class="lead">Download {NAME} and make your first invoice in a few minutes. No sign-up, no card, no trial that ends.</p>
+      <p class="lead">Download {NAME} and make your first invoice in a few minutes. No account, no card, no trial that ends.</p>
       <div class="cta-row">
         {btn(f'Download {NAME} free', 'download.html', 'inverse', 'lg', 'download')}
         {btn('Questions? Ask us', 'contact.html', 'on-dark', 'lg', 'message')}
@@ -1580,7 +1584,7 @@ compare_body = page_head('Compare', f'{NAME} compared with Vyapar, myBillBook, T
 
 page('compare.html', f'{NAME} vs Vyapar, myBillBook, Tally and Sleek Bill compared',
      f'Free billing software compared: {NAME} against Vyapar, myBillBook, Tally and Sleek Bill on free-plan limits, offline use, '
-     f'sign-up, open source, GST returns and more. Checked {COMPARE_CHECKED}.',
+     f'open source, GST returns and more. Checked {COMPARE_CHECKED}.',
      'compare', compare_body, crumb='Compare')
 
 # ───────────────────────────────── Contact ─────────────────────────────────
@@ -1788,7 +1792,7 @@ page('changelog.html', 'What’s new: release notes and version history',
 
 
 # ───────────────────── Legal pages: numbered cards with a topic list on the left ─────────────────────
-def legalize(title, lead, chips, body):
+def legalize(title, lead, chips, body, iso=RELEASE_ISO):
     """Turns a plain legal page (an intro, then <h2> sections) into the site's card layout: a short intro card, one card per
     section with a number, and a sticky 'On this page' list. The text itself is untouched. chips: three short facts that float
     behind the title (site.js)."""
@@ -1804,7 +1808,7 @@ def legalize(title, lead, chips, body):
         nav += f'<a class="lg{a}" href="#{slug}"><b>{n}</b><span>{text}</span></a>'
         cards += (f'<section class="legal-sec lg{a}" id="{slug}"><h2><b>{n}</b><span>{text}</span></h2>'
                   f'<div class="prose">{sec[sec.index("</h2>") + 5:].strip()}</div></section>')
-    head = page_head('Legal', title, lead, f'<p class="legal-meta"><span>Last updated: {date_tag(RELEASE_ISO)}</span></p>')
+    head = page_head('Legal', title, lead, f'<p class="legal-meta"><span>Last updated: {date_tag(iso)}</span></p>')
     return (head + f'''
 
 <section class="page-body">
@@ -1819,7 +1823,7 @@ def legalize(title, lead, chips, body):
 
 # ───────────────────────────────── Privacy ─────────────────────────────────
 ANALYTICS_BULLET = ('''<li><b>Analytics.</b> This website can use Google Analytics to count visits and see which pages and download buttons are used, <b>but only if you press Accept</b> in the cookie box. If you press Decline, or do not answer, no analytics script is loaded and no analytics cookie is set. When you accept, Google Analytics sets cookies in your browser; we have turned off its advertising features, and we use it only to improve the site. You can change your choice at any time with <b>Cookie settings</b> in the footer, and declining removes the analytics cookies. Your choice is remembered in your browser (local storage on this site), which is necessary for the box to work.</li>''' if CONSENT_BANNER else '''<li><b>Analytics.</b> This website uses Google Analytics to count visits and see which pages and download buttons are used. It sets cookies in your browser for this. Google Analytics does not store IP addresses, and we have turned off its advertising features. We use it only to improve the site. You can block these cookies in your browser settings.</li>''')
-privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {date_tag(RELEASE_ISO)}') + f'''
+privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {date_tag(max(RELEASE_ISO, PRIVACY_ISO))}') + f'''
 
 <section class="page-body">
   <div class="wrap">
@@ -1844,13 +1848,25 @@ privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {date_tag(RE
       <li><b>Forms.</b> Our support, customization and feedback forms are Google Forms. What you type into them (such as your name, email, phone number and message) is sent to our Google account so that we can reply. Google’s handling of it is described in the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>. The customization page shows its form on the page, so opening that page loads content from Google, which may set cookies. If you would rather not, the other pages only link to the forms and load nothing from Google until you open one.</li>
       {ANALYTICS_BULLET}
       <li><b>Email and WhatsApp.</b> If you contact us, we keep the conversation so that we can help you and follow up.</li>
+      <li><b>The download form.</b> Before a download starts, the website asks for your email or your phone / WhatsApp number (one is enough). The next section explains what happens to it.</li>
+    </ul>
+
+    <h2>If you leave your email or phone when downloading</h2>
+    <p>This is not a sign-up: no account and no password are created, and you do not need either to use {NAME}. We ask only so that we can help you get started.</p>
+    <ul>
+      <li><b>What we keep.</b> What you type (your email, your phone or WhatsApp number, or both), and with it: which installer you chose, the page and its language, where on the page the button was, the country your connection comes from (as Cloudflare reports it), your browser and system in short (for example “Chrome on Windows”), and the date and time. We do not keep your IP address. To stop misuse, our server counts form submissions for one day under a code made from your IP address with a one-way hash that changes every day, and deletes that count early the next day (UTC).</li>
+      <li><b>Why.</b> To help you install and set up {NAME}, and to tell you about updates, by email or WhatsApp. We do not sell or share it with anyone, and we do not use it for advertising.</li>
+      <li><b>Where.</b> In a database in our own Cloudflare account (the same small server that receives the app’s anonymous usage counts). Cloudflare’s handling is described in the <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare Privacy Policy</a>.</li>
+      <li><b>How long.</b> Until you ask us to remove it, or at most 2 years after you last filled in the form or our last message to you, whichever is later; after that it is deleted automatically.</li>
+      <li><b>Removing it.</b> Message us on <a href="https://wa.me/919025537550" data-whatsapp target="_blank" rel="noopener">WhatsApp</a> at <span data-whatsapp-number>+91 90255 37550</span>, use the <a href="contact.html" data-href="forms.support" target="_blank" rel="noopener">support form</a>, or write to <a href="mailto:{EMAIL}">{EMAIL}</a>, and we will delete it. If you only want us to stop sending messages, say so and we will.</li>
+      <li><b>In your browser.</b> After you fill in the form, this website notes in your browser (local storage on this site) that you did, so it does not ask again on that browser. If our server cannot be reached, the download still starts, and what you typed waits in your browser until your next visit to the site, is sent once more and is then removed from your browser.</li>
     </ul>
 
     <h2>How we use what you send us</h2>
-    <p>Only to answer you, to provide support, to prepare and deliver customization work you asked for, and to improve {NAME}. We do not sell or rent your information.</p>
+    <p>Only to answer you, to provide support, to send setup help and updates if you left your email or phone when downloading, to prepare and deliver customization work you asked for, and to improve {NAME}. We do not sell or rent your information.</p>
 
     <h2>How long we keep it</h2>
-    <p>We keep form replies and messages for as long as they are useful for supporting you, and delete them when you ask us to, unless we must keep a record by law (for example, invoices for paid work).</p>
+    <p>We keep form replies and messages for as long as they are useful for supporting you, and delete them when you ask us to, unless we must keep a record by law (for example, invoices for paid work). What you leave in the download form is kept as described above: until you ask us to remove it, and at most 2 years after you last filled in the form or our last message to you.</p>
 
     <h2>Your choices</h2>
     <p>You can ask us what information we hold about you, ask us to correct it, or ask us to delete it, by writing to <a href="mailto:{EMAIL}">{EMAIL}</a>.</p>
@@ -1870,7 +1886,8 @@ privacy_body = page_head('Legal', 'Privacy policy', f'Last updated: {date_tag(RE
 page('privacy.html', 'Privacy policy: business data stays on your PC',
      f'How {BUSINESS} handles information for the {NAME} app and website. Your business data stays on your computer, and '
      'anonymous usage counts can be turned off.',
-     'privacy', legalize('Privacy policy', 'What the app and this website handle, in plain words.', ['Stays on your PC', 'No ads, ever', 'No account needed'], privacy_body), crumb='Privacy policy')
+     'privacy', legalize('Privacy policy', 'What the app and this website handle, in plain words.', ['Stays on your PC', 'No ads, ever', 'No account needed'], privacy_body,
+                         iso=max(RELEASE_ISO, PRIVACY_ISO)), crumb='Privacy policy')
 
 # ────────────────────────────────── Terms ──────────────────────────────────
 terms_body = page_head('Legal', 'Terms of use', f'Last updated: {date_tag(RELEASE_ISO)}') + f'''
@@ -2094,7 +2111,7 @@ how_install_en = section(
     section_head('Before you install', 'What you need', 'Very little. Questions? See the <a href="faq.html#installing-and-updating">install answers in the FAQ</a>.', 'need-title')
     + '<div class="grid-auto mt-4">'
     + f'<div class="card">{tile("monitor")}<h3>A computer</h3><p>Windows 10 or 11 (64-bit), macOS 12 or later, or Linux (a .deb package or an AppImage). Invoiceo is a desktop app; it is not for phones.</p></div>'
-    + f'<div class="card">{tile("wifi-off")}<h3>No internet, no account</h3><p>You need the internet only to download it. Billing, printing and reports all work offline, and there is nothing to sign up for.</p></div>'
+    + f'<div class="card">{tile("wifi-off")}<h3>No internet, no account</h3><p>You need the internet only to download it. Billing, printing and reports all work offline, and there is no account to create.</p></div>'
     + f'<div class="card">{tile("shield")}<h3>A moment on Windows</h3><p>Windows may ask before it opens the installer, because it is not code-signed yet. The <a href="download.html">Download page</a> shows the two clicks, with pictures.</p></div>'
     + '</div>',
     'need', 'section-subtle', 'need-title')
@@ -2109,7 +2126,7 @@ how_cta_en = f"""<section class="cta-section" aria-labelledby="cta-title">
         {btn('Read the FAQ', 'faq.html', 'on-dark', 'lg', 'help')}
       </div>
       <p class="cta-meta">Version {VERSION} · Windows, macOS and Linux</p>
-      {checks(['Free forever', 'No invoice limit', 'Works offline', 'No sign-up'], 'checks-inline')}
+      {checks(['Free forever', 'No invoice limit', 'Works offline', 'No account needed'], 'checks-inline')}
     </div>
   </div>
 </section>"""
@@ -2302,7 +2319,7 @@ full += ['', '## Local billing rules, works anywhere', ''] + [f'- {md(i)}' for c
 full += ['', 'App languages: English, Tamil, Hindi, Nepali, French, Spanish, Chinese and Tibetan (partly translated).']
 full += ['', '## Screens', ''] + [f'- **{md(EN['shots']['screens'][n][0])}**: {md(EN['shots']['screens'][n][1])}' for n in screen_cards]
 full += ['', '## Download and install', '',
-         f'Download page: {SITE}/download.html. Every installer is free, with no sign-up, no licence key and no subscription. '
+         f'Download page: {SITE}/download.html. Every installer is free, with no account, no licence key and no subscription. '
          f'SHA-256 checksums are linked on the download page.', '']
 for p in PLATFORMS:
     full += [f'### {p["name"]}', '', f'- Requirements: {md(p["req"])}',
@@ -2323,8 +2340,8 @@ for t, items in FAQ_GROUPS:
         full += [f'**{md(q)}**', '', ' '.join(md(x) for x in (a if isinstance(a, list) else [a])), '']
 full += ['## Privacy', '', f'{NAME} keeps your business data on your computer. Nothing about your customers, prices or sales is sent to us or anyone else.', '',
          f'Summary of the privacy policy ({SITE}/privacy.html):', '']
-for h, ul in re.findall(r'<h2>(.*?)</h2>\s*<ul>(.*?)</ul>', privacy_body, re.S):
-    full += [f'### {md(h)}', ''] + [f'- {md(li)}' for li in re.findall(r'<li>(.*?)</li>', ul, re.S)] + ['']
+for h, intro, ul in re.findall(r'<h2>(.*?)</h2>\s*(?:<p>(.*?)</p>\s*)?<ul>(.*?)</ul>', privacy_body, re.S):
+    full += [f'### {md(h)}', ''] + ([md(intro), ''] if intro else []) + [f'- {md(li)}' for li in re.findall(r'<li>(.*?)</li>', ul, re.S)] + ['']
 full += ['## Terms of use (summary)', '', f'Full terms: {SITE}/terms.html', '']
 for h, para in re.findall(r'<h2>(.*?)</h2>\s*<p>(.*?)</p>', terms_body, re.S):
     full += [f'### {md(h)}', '', md(para), '']

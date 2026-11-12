@@ -1,6 +1,7 @@
 # Deploys worker.js as the "invoiceo-telemetry" Worker (usage counts).
 #   npx wrangler deploy                       (from this folder)
 #   npx wrangler d1 execute invoiceo-telemetry --remote --file=schema.sql
+#   npx wrangler d1 execute invoiceo-telemetry --remote --file=migrations/0001_leads.sql   (download form, once)
 # The STATS_KEY secret is set with `wrangler secret put STATS_KEY`; it is
 # never stored in this repo.
 name = "invoiceo-telemetry"
@@ -13,3 +14,12 @@ preview_urls = false
 binding = "DB"
 database_name = "invoiceo-telemetry"
 database_id = "0d286162-a341-4372-a6c0-de9d2b7659fc"
+
+# Worker logs stay OFF: the privacy policy promises that no IP addresses are stored.
+[observability]
+enabled = false
+
+# Daily at 00:05 UTC: deletes yesterday's rate-limit counters and leads older than 2 years
+# (the privacy page promises both). See scheduled() in worker.js.
+[triggers]
+crons = ["5 0 * * *"]
