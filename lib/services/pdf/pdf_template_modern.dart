@@ -250,7 +250,7 @@ pw.MultiPage buildModernTemplate(
               children: [
                 if (invoice.pdfNumberText(invoicePrefix, showLeadingZeros: showLeadingZeros) != null)
                   pw.Text(
-                      "#: ${invoice.pdfNumberText(invoicePrefix, showLeadingZeros: showLeadingZeros)}",
+                      "${pdfNumberLabel(invoice)}: ${invoice.pdfNumberText(invoicePrefix, showLeadingZeros: showLeadingZeros)}",
                       style: pw.TextStyle(
                           fontWeight: pw.FontWeight.bold, fontSize: style.bodyFontSize)),
                 pw.Text(

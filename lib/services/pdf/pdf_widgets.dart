@@ -1327,6 +1327,24 @@ String formatPdfDateTime(DateTime date, String pattern,
   return '$dateStr ${DateFormat(timePattern, 'en_US').format(date)}';
 }
 
+/// The label printed before the document number on the A4 templates ("Invoice No"), instead of a bare "#" that
+/// customers did not understand. Quotations and receipts say so; an invoice with a GST title that is its own
+/// document (Credit Note, Debit Note, Bill of Supply, Cash Bill) uses that name.
+String pdfNumberLabel(Invoice invoice) {
+  switch (invoice.type) {
+    case 'Quotation':
+      return 'Quotation No';
+    case 'Receipt':
+      return 'Receipt No';
+  }
+  final title = (invoice.invoiceTitle ?? '').trim().toLowerCase();
+  if (title.contains('credit note')) return 'Credit Note No';
+  if (title.contains('debit note')) return 'Debit Note No';
+  if (title.contains('invoice')) return 'Invoice No';
+  if (title.contains('bill of supply') || title.contains('cash bill')) return 'Bill No';
+  return 'Invoice No';
+}
+
 String formatInvoiceNumberForDisplay(String number, bool showLeadingZeros) {
   if (showLeadingZeros) return number;
   final stripped = number.replaceFirst(RegExp(r'^0+'), '');

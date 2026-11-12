@@ -130,9 +130,15 @@ pw.MultiPage buildMinimalTemplate(
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                if (invoice.pdfNumberText(invoicePrefix, showLeadingZeros: showLeadingZeros) != null)
+                if (invoice.pdfNumberText(invoicePrefix, showLeadingZeros: showLeadingZeros) != null) ...[
+                  pw.Text(pdfNumberLabel(invoice).toUpperCase(),
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold,
+                          fontSize: style.labelFontSize,
+                          color: accentColor)),
                   pw.Text(invoice.pdfNumberText(invoicePrefix, showLeadingZeros: showLeadingZeros)!,
                       style: pw.TextStyle(fontSize: style.bodyFontSize)),
+                ],
                 pw.SizedBox(height: style.headerGap)
               ],
             ),
@@ -172,9 +178,15 @@ pw.MultiPage buildMinimalTemplate(
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                if (invoice.pdfNumberText(invoicePrefix, showLeadingZeros: showLeadingZeros) != null)
+                if (invoice.pdfNumberText(invoicePrefix, showLeadingZeros: showLeadingZeros) != null) ...[
+                  pw.Text(pdfNumberLabel(invoice).toUpperCase(),
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold,
+                          fontSize: style.labelFontSize,
+                          color: accentColor)),
                   pw.Text(invoice.pdfNumberText(invoicePrefix, showLeadingZeros: showLeadingZeros)!,
                       style: pw.TextStyle(fontSize: style.bodyFontSize)),
+                ],
                 pw.SizedBox(height: style.headerGap),
                 pw.Text("DATE",
                     style: pw.TextStyle(
