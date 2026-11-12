@@ -25,9 +25,9 @@ SITE = 'https://invoiceo.in'
 NAME = 'Invoiceo'
 BUSINESS = 'Madcreations'
 EMAIL = 'madhanprasat2002r@gmail.com'
-VERSION = '1.0.10'
-RELEASE_DATE = '9 November 2026'
-RELEASE_ISO = '2026-11-09'
+VERSION = '1.0.11'
+RELEASE_DATE = '12 November 2026'
+RELEASE_ISO = '2026-11-12'
 # When the website's own text last changed. Set it to the publish date whenever
 # page content changes between app releases; pages use the later of this and
 # RELEASE_ISO as their dateModified and sitemap <lastmod>. PAGE_UPDATED can give
@@ -1671,6 +1671,14 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
     <article class="release" id="v{VERSION}">
       <h2>Version {VERSION} {badge('Latest', 'brand')}</h2>
       <p class="date">{date_tag(RELEASE_ISO)}</p>
+      <ul>
+        <li><b>Bills now say “Invoice No.” instead of “#”.</b> On the Classic, Modern and Executive invoice designs, the number now reads “Invoice No: INV-00000012” instead of “#: INV-00000012”. Quotations say Quotation No, receipts Receipt No, and bills with a GST title such as Credit Note, Debit Note or Bill of Supply use that name. The Minimal design gets an “INVOICE NO” heading above the number.</li>
+        <li>Your data and settings are unchanged: this release needs no database upgrade.</li>
+      </ul>
+    </article>
+    <article class="release" id="v1.0.10">
+      <h2>Version 1.0.10</h2>
+      <p class="date">{date_tag("2026-11-09")}</p>
       <ul>
         <li><b>A clearer “Forgot password?” page.</b> The Reset Password page now explains the three steps: send support your Installation ID and username, wait for the Response Code, then enter it. The Installation ID has a copy button, and an <b>Open the support form</b> button takes you straight to the support page.</li>
         <li><b>Skip for now on the first password change.</b> The first time you sign in with the starting password, you can set your own password or skip it and change it later. The page comes back at the next sign-in, so you are reminded.</li>
