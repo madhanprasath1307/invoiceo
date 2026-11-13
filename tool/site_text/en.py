@@ -7,6 +7,7 @@ TEXT = {'hero': {'badge': 'Free &amp; open source',
                   'tax) and your choice of 156 currencies. Invoiceo is a free, open-source desktop app — no invoice limit, no subscription, no '
                   'online account, and your business data never leaves your PC.',
           'dl_label': 'Download free',
+          'dl_live': {'live': 'LIVE', 'sofar': 'Downloads so far', 'note': 'installer downloads', 'unit': 'downloads and counting', 'aria': 'Installer downloads so far'},
           'features_btn': 'See the features',
           'meta': 'Free · Version <span data-version>{version}</span> · For Windows, macOS and Linux',
           'checks': ['Free forever', 'No invoice limit', 'Works offline', 'No account needed'],

@@ -942,6 +942,10 @@ def home_sections(lang):
         {btn(h['features_btn'], '#features', 'secondary', 'lg')}
       </div>
       {hero_send(lang)}
+      <div class="dl-live" data-dl-live hidden role="group" aria-label="{h['dl_live']['aria']}" data-live-label="{h['dl_live']['live']}" data-sofar-label="{h['dl_live']['sofar']}">
+        <div class="dl-live-top"><span class="dl-live-tag"><i class="dl-dot" aria-hidden="true"></i><b data-dl-tag>{h['dl_live']['live']}</b></span><span class="dl-live-note">{h['dl_live']['note']}</span></div>
+        <div class="dl-live-num"><span class="dl-live-count" data-dl-count>0</span><span class="dl-live-unit">{h['dl_live']['unit']}</span></div>
+      </div>
       <p class="hero-meta" data-hero-meta>{h['meta'].replace('{version}', VERSION)}</p>
       {checks(h['checks'], 'checks-inline')}
     </div>
