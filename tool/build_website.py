@@ -945,6 +945,10 @@ def home_sections(lang):
       <div class="dl-live" data-dl-live hidden role="group" aria-label="{h['dl_live']['aria']}" data-live-label="{h['dl_live']['live']}" data-sofar-label="{h['dl_live']['sofar']}">
         <div class="dl-live-top"><span class="dl-live-tag"><i class="dl-dot" aria-hidden="true"></i><b data-dl-tag>{h['dl_live']['live']}</b></span><span class="dl-live-note">{h['dl_live']['note']}</span></div>
         <div class="dl-live-num"><span class="dl-live-count" data-dl-count>0</span><span class="dl-live-unit">{h['dl_live']['unit']}</span></div>
+        <div class="dl-live-split" data-dl-split hidden>
+          <div class="dl-split-bar" aria-hidden="true"><i class="win" data-bar="win"></i><i class="mac" data-bar="mac"></i><i class="lin" data-bar="lin"></i></div>
+          <ul class="dl-split-key"><li><i class="k win" aria-hidden="true"></i>Windows <b data-pct="win"></b></li><li><i class="k mac" aria-hidden="true"></i>macOS <b data-pct="mac"></b></li><li><i class="k lin" aria-hidden="true"></i>Linux <b data-pct="lin"></b></li></ul>
+        </div>
       </div>
       <p class="hero-meta" data-hero-meta>{h['meta'].replace('{version}', VERSION)}</p>
       {checks(h['checks'], 'checks-inline')}
