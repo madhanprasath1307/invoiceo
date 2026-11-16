@@ -9667,6 +9667,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You can change it later from your user menu. We will ask again the next time you log in.'**
   String get changePasswordSkipHint;
+
+  /// Settings, Automatic sign-out card: section title
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic sign-out'**
+  String get autoSignOutTitle;
+
+  /// Settings, Automatic sign-out card: section subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out when the app has not been used for a while. If you come back before then, the app opens straight in.'**
+  String get autoSignOutSubtitle;
+
+  /// Settings, Automatic sign-out card: label of the time choice
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out when not used for'**
+  String get autoSignOutLabel;
+
+  /// Settings, Automatic sign-out card: small note under the label
+  ///
+  /// In en, this message translates to:
+  /// **'On a computer that several people use, choose a shorter time.'**
+  String get autoSignOutHint;
+
+  /// Settings, Automatic sign-out card: choice
+  ///
+  /// In en, this message translates to:
+  /// **'30 minutes'**
+  String get autoSignOutOption30Minutes;
+
+  /// Settings, Automatic sign-out card: choice
+  ///
+  /// In en, this message translates to:
+  /// **'1 hour'**
+  String get autoSignOutOption1Hour;
+
+  /// Settings, Automatic sign-out card: choice
+  ///
+  /// In en, this message translates to:
+  /// **'2 hours'**
+  String get autoSignOutOption2Hours;
+
+  /// Settings, Automatic sign-out card: choice
+  ///
+  /// In en, this message translates to:
+  /// **'4 hours'**
+  String get autoSignOutOption4Hours;
+
+  /// Settings, Automatic sign-out card: choice
+  ///
+  /// In en, this message translates to:
+  /// **'8 hours'**
+  String get autoSignOutOption8Hours;
+
+  /// Settings, Automatic sign-out card: choice
+  ///
+  /// In en, this message translates to:
+  /// **'1 day'**
+  String get autoSignOutOption1Day;
+
+  /// Settings, Automatic sign-out card: choice (the default)
+  ///
+  /// In en, this message translates to:
+  /// **'3 days (recommended)'**
+  String get autoSignOutOption3Days;
+
+  /// Automatic sign-out: the choice that opens the days / hours / minutes boxes
+  ///
+  /// In en, this message translates to:
+  /// **'Custom…'**
+  String get autoSignOutOptionCustom;
+
+  /// Automatic sign-out: the choice's name once a custom time is set, e.g. Custom: 2 days 4 hours
+  ///
+  /// In en, this message translates to:
+  /// **'Custom: {time}'**
+  String autoSignOutCustomValue(String time);
+
+  /// Automatic sign-out custom time: days box
+  ///
+  /// In en, this message translates to:
+  /// **'Days'**
+  String get autoSignOutCustomDays;
+
+  /// Automatic sign-out custom time: hours box
+  ///
+  /// In en, this message translates to:
+  /// **'Hours'**
+  String get autoSignOutCustomHours;
+
+  /// Automatic sign-out custom time: minutes box
+  ///
+  /// In en, this message translates to:
+  /// **'Minutes'**
+  String get autoSignOutCustomMinutes;
+
+  /// Automatic sign-out custom time: the total typed, e.g. 2 days 4 hours
+  ///
+  /// In en, this message translates to:
+  /// **'Signs out after {time} without use'**
+  String autoSignOutCustomSummary(String time);
+
+  /// Automatic sign-out custom time: shown when the typed time is too short or too long
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a time from 5 minutes to 30 days.'**
+  String get autoSignOutCustomRange;
+
+  /// Automatic sign-out: a number of days
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 day} other{{count} days}}'**
+  String autoSignOutDaysCount(int count);
+
+  /// Automatic sign-out: a number of hours
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 hour} other{{count} hours}}'**
+  String autoSignOutHoursCount(int count);
+
+  /// Automatic sign-out: a number of minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 minute} other{{count} minutes}}'**
+  String autoSignOutMinutesCount(int count);
 }
 
 class _AppLocalizationsDelegate

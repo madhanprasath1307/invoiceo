@@ -5872,4 +5872,98 @@ class AppLocalizationsTa extends AppLocalizations {
   @override
   String get changePasswordSkipHint =>
       'பின்னர் உங்கள் பயனர் மெனுவில் இருந்து மாற்றலாம். அடுத்த முறை உள்நுழையும்போது மீண்டும் கேட்போம்.';
+
+  @override
+  String get autoSignOutTitle => 'தானியங்கி வெளியேற்றம்';
+
+  @override
+  String get autoSignOutSubtitle =>
+      'சிறிது நேரம் ஆப்பைப் பயன்படுத்தாவிட்டால் தானாக வெளியேறும். அதற்கு முன் திரும்பி வந்தால் ஆப் நேரடியாகத் திறக்கும்.';
+
+  @override
+  String get autoSignOutLabel => 'இத்தனை நேரம் பயன்படுத்தாவிட்டால் வெளியேறு';
+
+  @override
+  String get autoSignOutHint =>
+      'பலர் பயன்படுத்தும் கணினியில் குறைவான நேரத்தைத் தேர்ந்தெடுங்கள்.';
+
+  @override
+  String get autoSignOutOption30Minutes => '30 நிமிடங்கள்';
+
+  @override
+  String get autoSignOutOption1Hour => '1 மணி நேரம்';
+
+  @override
+  String get autoSignOutOption2Hours => '2 மணி நேரம்';
+
+  @override
+  String get autoSignOutOption4Hours => '4 மணி நேரம்';
+
+  @override
+  String get autoSignOutOption8Hours => '8 மணி நேரம்';
+
+  @override
+  String get autoSignOutOption1Day => '1 நாள்';
+
+  @override
+  String get autoSignOutOption3Days => '3 நாட்கள் (பரிந்துரைக்கப்படுகிறது)';
+
+  @override
+  String get autoSignOutOptionCustom => 'தனிப்பயன்…';
+
+  @override
+  String autoSignOutCustomValue(String time) {
+    return 'தனிப்பயன்: $time';
+  }
+
+  @override
+  String get autoSignOutCustomDays => 'நாட்கள்';
+
+  @override
+  String get autoSignOutCustomHours => 'மணி';
+
+  @override
+  String get autoSignOutCustomMinutes => 'நிமிடங்கள்';
+
+  @override
+  String autoSignOutCustomSummary(String time) {
+    return '$time பயன்படுத்தாவிட்டால் வெளியேறும்';
+  }
+
+  @override
+  String get autoSignOutCustomRange =>
+      '5 நிமிடம் முதல் 30 நாட்கள் வரை ஒரு நேரத்தைத் தேர்ந்தெடுங்கள்.';
+
+  @override
+  String autoSignOutDaysCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count நாட்கள்',
+      one: '1 நாள்',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String autoSignOutHoursCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count மணி நேரம்',
+      one: '1 மணி நேரம்',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String autoSignOutMinutesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count நிமிடங்கள்',
+      one: '1 நிமிடம்',
+    );
+    return '$_temp0';
+  }
 }

@@ -35,6 +35,7 @@ import 'package:invoiceo/services/pdf_service.dart';
 import 'package:invoiceo/utils/formatters.dart';
 import 'package:invoiceo/widgets/apply_payment_dialog.dart';
 import 'package:invoiceo/widgets/customer_info_button.dart';
+import 'package:invoiceo/utils/saved_session.dart';
 import 'package:invoiceo/utils/session_manager.dart';
 
 import 'package:invoiceo/models/user.dart';
@@ -140,6 +141,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     _loadBusinessType();
     _loadCompanies();
     SessionManager.initialize(_onSessionTimeout);
+    unawaited(_applyAutoSignOutSetting());
     if (ref.read(appEditionConfigProvider).enableUpdateCheck) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdates());
     }
@@ -303,7 +305,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         context, MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
+  /// Sets the idle time the shop chose in Settings (3 days until they pick another).
+  Future<void> _applyAutoSignOutSetting() async {
+    try {
+      final saved = await ref
+          .read(settingsRepositoryProvider)
+          .getSetting(SettingKey.autoSignOutMinutes);
+      if (!mounted) return;
+      SessionManager.setLimit(Duration(minutes: parseAutoSignOutMinutes(saved)));
+    } catch (_) {
+      // The default (3 days) stays.
+    }
+  }
+
   void _onSessionTimeout() async {
+    if (!mounted) return;
+    await SavedSession.clear(); // an expired session must not reopen by itself
     if (!mounted) return;
     // Nobody is there to answer the unsaved-changes prompt: keep a new
     // invoice being built as a draft. A failure never stops the logout.

@@ -8,6 +8,7 @@ import 'package:invoiceo/l10n/app_localizations.dart';
 import 'package:invoiceo/layouts/modern/modern_page_header.dart';
 import 'package:invoiceo/layouts/ui_layout.dart';
 import 'package:invoiceo/providers/repositories.dart';
+import 'package:invoiceo/screens/settings/auto_sign_out_card.dart';
 import 'package:invoiceo/theme/brand_colors.dart';
 
 class AccessibilityScreen extends ConsumerStatefulWidget {
@@ -122,6 +123,7 @@ class _AccessibilityScreenState extends ConsumerState<AccessibilityScreen>
                   ),
                 ),
                 const SizedBox(height: 24),
+                const AutoSignOutCard(),
                 if (!Platform.isAndroid) ...[
                   Text(l10n.dashboardKeyboardShortcutsTitle,
                       style: const TextStyle(

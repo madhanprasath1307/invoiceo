@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:invoiceo/database/database_helper.dart';
 import 'package:invoiceo/l10n/app_localizations.dart';
 import 'package:invoiceo/screens/auth/login_screen.dart';
 import 'package:invoiceo/common/constants.dart';
+import 'package:invoiceo/common/setting_key.dart';
+import 'package:invoiceo/providers/app_config_provider.dart';
+import 'package:invoiceo/providers/repositories.dart';
 import 'package:invoiceo/utils/app_logger.dart';
+import 'package:invoiceo/utils/post_auth_navigation.dart';
+import 'package:invoiceo/utils/saved_session.dart';
+import 'package:invoiceo/models/user.dart';
 
 const _tag = 'SplashScreen';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
@@ -48,10 +55,30 @@ class _SplashScreenState extends State<SplashScreen> {
     AppLogger.d(_tag, 'DB path: ${DatabaseHelper.path}');
 
     if (!mounted) return;
+    // Used less than the chosen time ago (Settings → Automatic sign-out; 3 days unless changed): open straight in
+    // as the same user. Not in the cloud edition or a test build (its sign-in has its own checks).
+    final user = await _savedUser();
+    if (!mounted) return;
+    if (user != null) {
+      await navigateAfterAuth(context, ref, user);
+      return;
+    }
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => const LoginScreen()),
     );
+  }
+
+  Future<User?> _savedUser() async {
+    try {
+      if (ref.read(appEditionConfigProvider).isCloud || TestBuildConfig.isTestBuild) return null;
+      final minutes = parseAutoSignOutMinutes(
+          await ref.read(settingsRepositoryProvider).getSetting(SettingKey.autoSignOutMinutes));
+      return await SavedSession.restore(ref.read(authRepositoryProvider), minutes);
+    } catch (e, stack) {
+      AppLogger.e(_tag, 'Saved sign-in not used', e, stack);
+      return null;
+    }
   }
 
   @override

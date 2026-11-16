@@ -41,6 +41,7 @@ import 'package:invoiceo/screens/auth/login_screen.dart';
 import 'package:invoiceo/screens/dashboard_screen.dart';
 import 'package:invoiceo/screens/onboarding/onboarding_screen.dart';
 import 'package:invoiceo/services/backend_services.dart';
+import 'package:invoiceo/utils/saved_session.dart';
 import 'package:invoiceo/utils/session_manager.dart';
 
 final en = AppLocalizationsEn();
@@ -91,6 +92,7 @@ void main() {
 
   tearDown(() {
     SessionManager.dispose();
+    SavedSession.now = DateTime.now;
     Intl.defaultLocale = null;
   });
 
@@ -421,8 +423,17 @@ void main() {
         noErrors(tester, 'page $page');
       }
 
-      // A restart lands on Login (no hint now) and goes straight to the
-      // dashboard — no second onboarding, no second forced change.
+      // A restart (used less than 3 days ago) opens straight in as the same
+      // user: no Login, no second onboarding, no second forced change.
+      await relaunch(tester);
+      await startApp(tester);
+      expect(find.byType(DashboardScreen), findsOneWidget);
+      expect(find.byType(LoginScreen), findsNothing);
+      expect(find.byType(OnboardingScreen), findsNothing);
+      noErrors(tester, 'restart straight in');
+
+      // After Logout a restart lands on Login (no hint now).
+      await logout(tester);
       await relaunch(tester);
       await startApp(tester);
       expect(find.byType(LoginScreen), findsOneWidget);
@@ -952,9 +963,10 @@ void main() {
 
   group('session timeout', () {
     testWidgets(
-        '30 idle minutes on an unsaved new invoice: saved as a draft, back to '
+        '30 idle minutes (the shortest choice) on an unsaved new invoice: saved as a draft, back to '
         'Login with a message', (tester) async {
       await firstRunToDashboard(tester);
+      SessionManager.setLimit(const Duration(minutes: 30)); // the shortest choice
       await openNav(tester, en.navNewInvoice);
       noErrors(tester, 'new invoice');
       await tester.enterText(
@@ -983,9 +995,57 @@ void main() {
       expect(drafts.single.toString(), contains('Walk-in Ravi'));
     });
 
+    testWidgets('by default the app stays signed in for 3 days: 2 idle days are fine, past 3 it signs out',
+        (tester) async {
+      await firstRunToDashboard(tester);
+      await tester.pump(const Duration(minutes: 40)); // the old 30 minutes
+      await settle(tester, 2);
+      expect(find.byType(DashboardScreen), findsOneWidget);
+      await tester.pump(const Duration(days: 2));
+      await settle(tester, 2);
+      expect(find.byType(DashboardScreen), findsOneWidget);
+      await tester.pump(const Duration(days: 1));
+      await settle(tester, 16);
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.text(en.dashboardSessionExpiredMessage), findsOneWidget);
+      noErrors(tester, '3 days');
+    });
+
+    testWidgets('closing and reopening: in when used less than the time ago, Login after it',
+        (tester) async {
+      await firstRunToDashboard(tester);
+      // The shop picked 1 day. Closed and opened 20 hours later: straight in.
+      await io(tester, () => BackendServices.settings.setSetting(SettingKey.autoSignOutMinutes, '1440'));
+      final real = DateTime.now;
+      SavedSession.now = () => real().add(const Duration(hours: 20));
+      await relaunch(tester);
+      await startApp(tester);
+      expect(find.byType(DashboardScreen), findsOneWidget);
+      expect(find.byType(LoginScreen), findsNothing);
+      // The dashboard counts the 1 day too: 20 more idle hours is fine, past a day it signs out.
+      await tester.pump(const Duration(hours: 23));
+      await settle(tester, 2);
+      expect(find.byType(DashboardScreen), findsOneWidget);
+      await tester.pump(const Duration(hours: 2));
+      await settle(tester, 16);
+      expect(find.byType(LoginScreen), findsOneWidget);
+
+      // Signed in again, closed and opened 25 hours later: Login.
+      SavedSession.now = real;
+      await login(tester, 'admin', _adminNewPassword);
+      expect(find.byType(DashboardScreen), findsOneWidget);
+      SavedSession.now = () => real().add(const Duration(hours: 25));
+      await relaunch(tester);
+      await startApp(tester);
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.byType(DashboardScreen), findsNothing);
+      SavedSession.now = real;
+    });
+
     testWidgets('an untouched new invoice does not leave an empty draft',
         (tester) async {
       await firstRunToDashboard(tester);
+      SessionManager.setLimit(const Duration(minutes: 30));
       await openNav(tester, en.navNewInvoice);
       await tester.pump(const Duration(minutes: 31));
       await settle(tester, 16);

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:invoiceo/common/common.dart';
 import 'package:invoiceo/models/user.dart';
+import 'package:invoiceo/providers/app_config_provider.dart';
+import 'package:invoiceo/utils/saved_session.dart';
 import 'package:invoiceo/providers/repositories.dart';
 import 'package:invoiceo/screens/dashboard_screen.dart';
 import 'package:invoiceo/screens/onboarding/onboarding_screen.dart';
@@ -14,6 +16,9 @@ Future<void> navigateAfterAuth(
   final completed = await ref
       .read(settingsRepositoryProvider)
       .getSetting(SettingKey.onboardingCompleted);
+  if (!context.mounted) return;
+  // Remember who signed in, so the app opens straight in until it has gone unused for the chosen time.
+  if (!ref.read(appEditionConfigProvider).isCloud) await SavedSession.save(user);
   if (!context.mounted) return;
   Navigator.pushReplacement(
     context,

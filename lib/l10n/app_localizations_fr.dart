@@ -5835,4 +5835,98 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get changePasswordSkipHint =>
       'You can change it later from your user menu. We will ask again the next time you log in.';
+
+  @override
+  String get autoSignOutTitle => 'Automatic sign-out';
+
+  @override
+  String get autoSignOutSubtitle =>
+      'Sign out when the app has not been used for a while. If you come back before then, the app opens straight in.';
+
+  @override
+  String get autoSignOutLabel => 'Sign out when not used for';
+
+  @override
+  String get autoSignOutHint =>
+      'On a computer that several people use, choose a shorter time.';
+
+  @override
+  String get autoSignOutOption30Minutes => '30 minutes';
+
+  @override
+  String get autoSignOutOption1Hour => '1 hour';
+
+  @override
+  String get autoSignOutOption2Hours => '2 hours';
+
+  @override
+  String get autoSignOutOption4Hours => '4 hours';
+
+  @override
+  String get autoSignOutOption8Hours => '8 hours';
+
+  @override
+  String get autoSignOutOption1Day => '1 day';
+
+  @override
+  String get autoSignOutOption3Days => '3 days (recommended)';
+
+  @override
+  String get autoSignOutOptionCustom => 'Custom…';
+
+  @override
+  String autoSignOutCustomValue(String time) {
+    return 'Custom: $time';
+  }
+
+  @override
+  String get autoSignOutCustomDays => 'Days';
+
+  @override
+  String get autoSignOutCustomHours => 'Hours';
+
+  @override
+  String get autoSignOutCustomMinutes => 'Minutes';
+
+  @override
+  String autoSignOutCustomSummary(String time) {
+    return 'Signs out after $time without use';
+  }
+
+  @override
+  String get autoSignOutCustomRange =>
+      'Choose a time from 5 minutes to 30 days.';
+
+  @override
+  String autoSignOutDaysCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days',
+      one: '1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String autoSignOutHoursCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count hours',
+      one: '1 hour',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String autoSignOutMinutesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count minutes',
+      one: '1 minute',
+    );
+    return '$_temp0';
+  }
 }

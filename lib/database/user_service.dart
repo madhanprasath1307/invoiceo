@@ -1,4 +1,5 @@
 import 'package:invoiceo/models/user.dart';
+import 'package:invoiceo/utils/saved_session.dart';
 import 'package:invoiceo/utils/session_manager.dart';
 import 'database_helper.dart';
 import 'package:invoiceo/utils/app_logger.dart';
@@ -173,5 +174,6 @@ class UserService {
 
   static Future<void> logoutAndSessionReset() async {
     SessionManager.dispose();
+    await SavedSession.clear();
   }
 }

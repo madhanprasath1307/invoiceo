@@ -3759,5 +3759,114 @@
   "changePasswordSkipHint": "You can change it later from your user menu. We will ask again the next time you log in.",
   "@changePasswordSkipHint": {
     "description": "Change Password Required page: small note under the Skip button"
+  },
+  "autoSignOutTitle": "Automatic sign-out",
+  "@autoSignOutTitle": {
+    "description": "Settings, Automatic sign-out card: section title"
+  },
+  "autoSignOutSubtitle": "Sign out when the app has not been used for a while. If you come back before then, the app opens straight in.",
+  "@autoSignOutSubtitle": {
+    "description": "Settings, Automatic sign-out card: section subtitle"
+  },
+  "autoSignOutLabel": "Sign out when not used for",
+  "@autoSignOutLabel": {
+    "description": "Settings, Automatic sign-out card: label of the time choice"
+  },
+  "autoSignOutHint": "On a computer that several people use, choose a shorter time.",
+  "@autoSignOutHint": {
+    "description": "Settings, Automatic sign-out card: small note under the label"
+  },
+  "autoSignOutOption30Minutes": "30 minutes",
+  "@autoSignOutOption30Minutes": {
+    "description": "Settings, Automatic sign-out card: choice"
+  },
+  "autoSignOutOption1Hour": "1 hour",
+  "@autoSignOutOption1Hour": {
+    "description": "Settings, Automatic sign-out card: choice"
+  },
+  "autoSignOutOption2Hours": "2 hours",
+  "@autoSignOutOption2Hours": {
+    "description": "Settings, Automatic sign-out card: choice"
+  },
+  "autoSignOutOption4Hours": "4 hours",
+  "@autoSignOutOption4Hours": {
+    "description": "Settings, Automatic sign-out card: choice"
+  },
+  "autoSignOutOption8Hours": "8 hours",
+  "@autoSignOutOption8Hours": {
+    "description": "Settings, Automatic sign-out card: choice"
+  },
+  "autoSignOutOption1Day": "1 day",
+  "@autoSignOutOption1Day": {
+    "description": "Settings, Automatic sign-out card: choice"
+  },
+  "autoSignOutOption3Days": "3 days (recommended)",
+  "@autoSignOutOption3Days": {
+    "description": "Settings, Automatic sign-out card: choice (the default)"
+  },
+  "autoSignOutOptionCustom": "Custom…",
+  "@autoSignOutOptionCustom": {
+    "description": "Automatic sign-out: the choice that opens the days / hours / minutes boxes"
+  },
+  "autoSignOutCustomValue": "Custom: {time}",
+  "@autoSignOutCustomValue": {
+    "description": "Automatic sign-out: the choice's name once a custom time is set, e.g. Custom: 2 days 4 hours",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "autoSignOutCustomDays": "Days",
+  "@autoSignOutCustomDays": {
+    "description": "Automatic sign-out custom time: days box"
+  },
+  "autoSignOutCustomHours": "Hours",
+  "@autoSignOutCustomHours": {
+    "description": "Automatic sign-out custom time: hours box"
+  },
+  "autoSignOutCustomMinutes": "Minutes",
+  "@autoSignOutCustomMinutes": {
+    "description": "Automatic sign-out custom time: minutes box"
+  },
+  "autoSignOutCustomSummary": "Signs out after {time} without use",
+  "@autoSignOutCustomSummary": {
+    "description": "Automatic sign-out custom time: the total typed, e.g. 2 days 4 hours",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "autoSignOutCustomRange": "Choose a time from 5 minutes to 30 days.",
+  "@autoSignOutCustomRange": {
+    "description": "Automatic sign-out custom time: shown when the typed time is too short or too long"
+  },
+  "autoSignOutDaysCount": "{count, plural, =1{1 day} other{{count} days}}",
+  "@autoSignOutDaysCount": {
+    "description": "Automatic sign-out: a number of days",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "autoSignOutHoursCount": "{count, plural, =1{1 hour} other{{count} hours}}",
+  "@autoSignOutHoursCount": {
+    "description": "Automatic sign-out: a number of hours",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "autoSignOutMinutesCount": "{count, plural, =1{1 minute} other{{count} minutes}}",
+  "@autoSignOutMinutesCount": {
+    "description": "Automatic sign-out: a number of minutes",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }
