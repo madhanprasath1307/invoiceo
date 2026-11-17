@@ -25,7 +25,7 @@ SITE = 'https://invoiceo.in'
 NAME = 'Invoiceo'
 BUSINESS = 'Madcreations'
 EMAIL = 'madhanprasat2002r@gmail.com'
-VERSION = '1.0.13'
+VERSION = '1.0.14'
 RELEASE_DATE = '17 November 2026'
 RELEASE_ISO = '2026-11-17'
 # When the website's own text last changed. Set it to the publish date whenever
@@ -1679,6 +1679,18 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
     <article class="release" id="v{VERSION}">
       <h2>Version {VERSION} {badge('Latest', 'brand')}</h2>
       <p class="date">{date_tag(RELEASE_ISO)}</p>
+      <ul>
+        <li><b>Save a draft in the Standard layout too.</b> The New Invoice page now has a <b>Draft</b> button, and when you leave a half-made invoice the question offers <b>Save Draft</b> next to Keep Editing, Discard and Save. Your drafts are listed above the Invoices, Quotations and Receipts lists, and <b>Continue</b> opens one again. Drafts are shared with the Modern layout.</li>
+        <li><b>A draft remembers the Payment choice.</b> If you chose Partial or Paid (with the amount, the method and the reference), it comes back when you continue the draft. Nothing is recorded until you create the invoice.</li>
+        <li><b>Contact Support on every page.</b> In the Modern layout a blue support icon sits in the top bar of every page. Hover to see its name, click to open the support request form directly.</li>
+        <li><b>The Created page shows what was paid</b> in the Standard layout as well: “PAID IN FULL · Cash”, or the amount received and the balance due.</li>
+        <li><b>Easier New Invoice page.</b> Advanced Options start open in the Modern layout. In the Standard layout the right-hand panel now scrolls as one piece, so the Payment section is easy to reach on a small window, and “Draft saved” no longer covers the buttons.</li>
+        <li>Your data and settings are unchanged: this release needs no database upgrade.</li>
+      </ul>
+    </article>
+    <article class="release" id="v1.0.13">
+      <h2>Version 1.0.13</h2>
+      <p class="date">{date_tag("2026-11-17")}</p>
       <ul>
         <li><b>Record the payment while you make the invoice.</b> The New Invoice page has a new <b>Payment</b> section with <b>Unpaid</b>, <b>Partial</b> and <b>Paid</b>. Unpaid works as before and records nothing. <b>Paid</b> asks for the payment method (Cash, Bank Transfer, Cheque, Online or Other, the same list as Apply Payment) and records the full amount. <b>Partial</b> asks for the amount received and the method, and shows the balance due as you type. The payment is saved with the invoice: the Created page says what was paid, and the printed bill shows “Paid in full” or the balance due.</li>
         <li>Your data and settings are unchanged: this release needs no database upgrade.</li>
