@@ -25,9 +25,9 @@ SITE = 'https://invoiceo.in'
 NAME = 'Invoiceo'
 BUSINESS = 'Madcreations'
 EMAIL = 'madhanprasat2002r@gmail.com'
-VERSION = '1.0.12'
-RELEASE_DATE = '16 November 2026'
-RELEASE_ISO = '2026-11-16'
+VERSION = '1.0.13'
+RELEASE_DATE = '17 November 2026'
+RELEASE_ISO = '2026-11-17'
 # When the website's own text last changed. Set it to the publish date whenever
 # page content changes between app releases; pages use the later of this and
 # RELEASE_ISO as their dateModified and sitemap <lastmod>. PAGE_UPDATED can give
@@ -1679,6 +1679,14 @@ changelog_body = page_head('Updates', f'What’s new in {NAME}', 'Every release,
     <article class="release" id="v{VERSION}">
       <h2>Version {VERSION} {badge('Latest', 'brand')}</h2>
       <p class="date">{date_tag(RELEASE_ISO)}</p>
+      <ul>
+        <li><b>Record the payment while you make the invoice.</b> The New Invoice page has a new <b>Payment</b> section with <b>Unpaid</b>, <b>Partial</b> and <b>Paid</b>. Unpaid works as before and records nothing. <b>Paid</b> asks for the payment method (Cash, Bank Transfer, Cheque, Online or Other, the same list as Apply Payment) and records the full amount. <b>Partial</b> asks for the amount received and the method, and shows the balance due as you type. The payment is saved with the invoice: the Created page says what was paid, and the printed bill shows “Paid in full” or the balance due.</li>
+        <li>Your data and settings are unchanged: this release needs no database upgrade.</li>
+      </ul>
+    </article>
+    <article class="release" id="v1.0.12">
+      <h2>Version 1.0.12</h2>
+      <p class="date">{date_tag("2026-11-16")}</p>
       <ul>
         <li><b>Stay signed in.</b> Invoiceo no longer signs you out after 30 minutes. It now stays signed in until the app has not been used for 3 days, even if you close it and open it again, so you do not have to type your password every time. <b>Logout</b> still signs you out at once.</li>
         <li><b>Choose your own sign-out time.</b> In <b>Settings → Accessibility → Automatic sign-out</b>, pick 30 minutes, 1 hour, 2 hours, 4 hours, 8 hours, 1 day or 3 days (the default). Or choose <b>Custom</b> and type your own days, hours and minutes, from 5 minutes to 30 days. On a computer that several people use, choose a shorter time.</li>
