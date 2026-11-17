@@ -1612,5 +1612,14 @@
   "autoSignOutCustomRange": "5 நிமிடம் முதல் 30 நாட்கள் வரை ஒரு நேரத்தைத் தேர்ந்தெடுங்கள்.",
   "autoSignOutDaysCount": "{count, plural, =1{1 நாள்} other{{count} நாட்கள்}}",
   "autoSignOutHoursCount": "{count, plural, =1{1 மணி நேரம்} other{{count} மணி நேரம்}}",
-  "autoSignOutMinutesCount": "{count, plural, =1{1 நிமிடம்} other{{count} நிமிடங்கள்}}"
+  "autoSignOutMinutesCount": "{count, plural, =1{1 நிமிடம்} other{{count} நிமிடங்கள்}}",
+  "createInvoicePaymentSectionTitle": "செலுத்துதல்",
+  "createInvoicePaymentUnpaidNote": "இப்போது எந்தக் கட்டணமும் பதிவாகாது. பிறகு 'பணம் செலுத்துதல்' மூலம் சேர்க்கலாம்.",
+  "createInvoicePaymentAmountLabel": "பெறப்பட்ட தொகை",
+  "createInvoicePaymentBalanceDue": "இந்தத் தொகைக்குப் பிறகு மீதம்: {amount}",
+  "createInvoicePaymentPaidNote": "முழுத் தொகை ({amount}) செலுத்தப்பட்டதாகப் பதிவாகும்.",
+  "createInvoicePaymentAmountRequired": "பெறப்பட்ட தொகையை உள்ளிடவும்",
+  "createInvoicePaymentAmountTooHigh": "பகுதி கட்டணத்திற்கு, மொத்தத்தை விடக் குறைவாக உள்ளிடவும். முழுத் தொகைக்கு 'செலுத்தப்பட்டது' என்பதைத் தேர்ந்தெடுக்கவும்.",
+  "createInvoicePaymentSaveFailed": "விலைப்பட்டியல் உருவாக்கப்பட்டது, ஆனால் கட்டணத்தைச் சேமிக்க முடியவில்லை: {error}. 'பணம் செலுத்துதல்' மூலம் சேர்க்கவும்.",
+  "createInvoicePaymentReceivedLine": "பெறப்பட்டது {received} · மீதம் {balance}"
 }

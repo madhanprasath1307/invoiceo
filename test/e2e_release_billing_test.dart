@@ -46,6 +46,7 @@ import 'package:invoiceo/repositories/sqlite/sqlite_invoice_repository.dart';
 import 'package:invoiceo/repositories/sqlite/sqlite_payment_repository.dart';
 import 'package:invoiceo/repositories/sqlite/sqlite_settings_repository.dart';
 import 'package:invoiceo/screens/dashboard_screen.dart';
+import 'package:invoiceo/utils/new_invoice_payment.dart';
 import 'package:invoiceo/services/backend_services.dart';
 import 'package:invoiceo/services/customer_statement_pdf_service.dart';
 import 'package:invoiceo/services/invoice_pdf_services.dart';
@@ -1681,4 +1682,184 @@ void main() {
     });
   });
 
+  // ═════════════════════════════════════════════
+  // The Payment section on the New Invoice form (both layouts): Unpaid records nothing, Paid asks for the method
+  // and records the whole total, Partial asks for the amount (less than the total) and the method.
+  group('New Invoice: the Payment section (Unpaid / Partial / Paid)', () {
+    Future<void> tapKey(WidgetTester tester, String key) async {
+      final f = find.byKey(ValueKey(key));
+      await tester.ensureVisible(f);
+      await tester.tap(f);
+      await tester.pump();
+      await settle(tester, 4);
+    }
+
+    Future<Invoice> byNumber(WidgetTester tester, String number) async {
+      final all = await db(tester, InvoiceService.getAllInvoices);
+      return (await db<dynamic>(tester,
+          () => InvoiceService.getInvoiceById(all.singleWhere((i) => i.invoiceNumber == number).id)))! as Invoice;
+    }
+
+    Future<void> pickMethod(WidgetTester tester, String label) async {
+      await tapKey(tester, 'newInvoicePaymentMethod');
+      await tester.tap(find.text(label).last);
+      await tester.pump();
+      await settle(tester, 4);
+    }
+
+    String? methodShown(WidgetTester tester) =>
+        tester.widget<DropdownButtonFormField<String>>(find.byKey(const ValueKey('newInvoicePaymentMethod'))).initialValue;
+
+    testWidgets('Modern: Unpaid is the default and records nothing; Paid records the whole total with the method; '
+        'Partial asks for an amount less than the total; Create New starts on Unpaid again', (tester) async {
+      await openApp(tester, seed: seedShop);
+      await nav(tester, 'New Invoice');
+      expect(find.byKey(const ValueKey('newInvoicePaymentSection')), findsOneWidget);
+      expect(tester.widget<SegmentedButton<NewInvoicePaymentStatus>>(find.byKey(const ValueKey('newInvoicePaymentStatus'))).selected,
+          {NewInvoicePaymentStatus.unpaid});
+      expect(find.byKey(const ValueKey('newInvoicePaymentMethod')), findsNothing, reason: 'Unpaid asks for nothing');
+
+      // 1. Unpaid: nothing is recorded, the invoice is outstanding.
+      await walkIn(tester, 'Meena');
+      await addItem(tester, 'Basmati'); // 100 + 18% = 118
+      await create(tester);
+      var inv = await byNumber(tester, '00000001');
+      expect(inv.total, closeTo(118, 0.001));
+      expect(inv.payments, isEmpty);
+      expect(inv.paymentStatus, PaymentStatus.unpaid);
+
+      // 2. Paid: the method is asked for (Cash is chosen), Online picked, a reference typed.
+      await tester.tap(find.byKey(const ValueKey('modernSuccessNewInvoice')));
+      await settle(tester);
+      expect(tester.widget<SegmentedButton<NewInvoicePaymentStatus>>(find.byKey(const ValueKey('newInvoicePaymentStatus'))).selected,
+          {NewInvoicePaymentStatus.unpaid}, reason: 'a new form starts on Unpaid');
+      await walkIn(tester, 'Ravi');
+      await addItem(tester, 'Basmati');
+      await tapKey(tester, 'newInvoicePayPaid');
+      expect(find.byKey(const ValueKey('newInvoicePaymentAmount')), findsNothing, reason: 'Paid takes the whole total');
+      expect(methodShown(tester), 'Cash');
+      await pickMethod(tester, 'Online');
+      await tester.enterText(find.byKey(const ValueKey('newInvoicePaymentNotes')), 'UPI 777');
+      await tester.pump();
+      await create(tester);
+      expect(tester.takeException(), isNull);
+      inv = await byNumber(tester, '00000002');
+      expect(inv.payments, hasLength(1));
+      expect(inv.payments.single.amountPaid, closeTo(118, 0.001));
+      expect(inv.payments.single.paymentMethod, 'Online');
+      expect(inv.payments.single.notes, 'UPI 777');
+      expect(inv.paymentStatus, PaymentStatus.paid);
+      expect(inv.outstandingBalance, closeTo(0, 0.001));
+      expect(find.byKey(const ValueKey('modernSuccess')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('modernSuccessPayment')), matching: find.text('PAID IN FULL · Online')), findsOneWidget,
+          reason: 'the Created page says what was paid');
+
+      // 3. Partial: an empty or too-big amount stops the save; 50 is recorded as Cash.
+      await tester.tap(find.byKey(const ValueKey('modernSuccessNewInvoice')));
+      await settle(tester);
+      await walkIn(tester, 'Suresh');
+      await addItem(tester, 'Basmati');
+      await tapKey(tester, 'newInvoicePayPartial');
+      expect(methodShown(tester), 'Cash', reason: 'the method went back to Cash');
+      await create(tester); // no amount
+      expect(find.text('Enter the amount received'), findsWidgets);
+      expect((await db(tester, InvoiceService.getAllInvoices)).length, 2, reason: 'nothing was saved');
+      await tester.enterText(find.byKey(const ValueKey('newInvoicePaymentAmount')), '118');
+      await tester.pump();
+      await create(tester); // the whole total is "Paid", not a part payment
+      expect(find.textContaining('Choose Paid for the full amount'), findsWidgets);
+      expect((await db(tester, InvoiceService.getAllInvoices)).length, 2);
+      await tester.enterText(find.byKey(const ValueKey('newInvoicePaymentAmount')), '50');
+      await tester.pump();
+      expect(find.textContaining('68.00'), findsWidgets, reason: 'the balance due is shown');
+      await create(tester);
+      expect(tester.takeException(), isNull);
+      expect(find.descendant(of: find.byKey(const ValueKey('modernSuccessPayment')), matching: find.textContaining('Balance due')), findsOneWidget);
+      inv = await byNumber(tester, '00000003');
+      expect(inv.payments.single.amountPaid, 50);
+      expect(inv.payments.single.paymentMethod, 'Cash');
+      expect(inv.paymentStatus, PaymentStatus.partial);
+      expect(inv.outstandingBalance, closeTo(68, 0.001));
+
+      // The money counts everywhere: collected 118 + 50, outstanding 118 + 0 + 68.
+      final fin = await db(tester, InvoiceService.getDashboardFinancials);
+      expect(fin.revenue, closeTo(168, 0.001));
+      expect(fin.outstanding, closeTo(186, 0.001));
+      // Stock was taken once per invoice, as always.
+      expect(await stockOf(tester, 'rice'), 47);
+    }, timeout: const Timeout(Duration(minutes: 3)));
+
+    testWidgets('the section is only on a NEW Invoice: not on a Quotation, not when editing', (tester) async {
+      await openApp(tester, seed: seedShop);
+      await nav(tester, 'New Invoice');
+      await walkIn(tester, 'Meena');
+      await addItem(tester, 'Basmati');
+      await create(tester);
+      final id = (await db(tester, InvoiceService.getAllInvoices)).single.id;
+
+      await nav(tester, 'Invoices');
+      await tester.tap(find.byKey(ValueKey('rowEdit_$id')));
+      await settle(tester);
+      expect(find.byKey(const ValueKey('newInvoicePaymentSection')), findsNothing, reason: 'editing');
+
+      await nav(tester, 'Dashboard');
+      await settle(tester);
+      await tester.tap(find.byKey(const ValueKey('modernCreateMenu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(of: find.byType(PopupMenuItem<ModernCreate>), matching: find.text('New Quotation')));
+      await settle(tester);
+      expect(find.text('Quotation Details'), findsOneWidget);
+      expect(find.byKey(const ValueKey('newInvoicePaymentSection')), findsNothing, reason: 'a quotation has no payment');
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    for (final (label, paid, amount) in [('Paid', true, ''), ('Partial', false, '40')]) {
+      testWidgets('Standard layout: $label records the payment', (tester) async {
+        await openApp(tester, layout: UiLayout.standard, seed: seedShop);
+        await tester.tap(find.byIcon(Icons.receipt_outlined));
+        await settle(tester);
+        await tester.enterText(find.widgetWithText(TextField, 'Customer Name *'), 'Standard Sam');
+        await tester.pump();
+        FocusManager.instance.primaryFocus?.unfocus();
+        await tester.pump();
+        const keys = {'0': LogicalKeyboardKey.digit0, '1': LogicalKeyboardKey.digit1, '6': LogicalKeyboardKey.digit6};
+        for (final ch in '1006'.split('')) {
+          await tester.sendKeyDownEvent(keys[ch]!, character: ch);
+          await tester.sendKeyUpEvent(keys[ch]!);
+          await tester.pump(const Duration(milliseconds: 5));
+        }
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.enter);
+        await tester.pump(const Duration(milliseconds: 700));
+        await settle(tester);
+        await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Add')));
+        await settle(tester);
+        await clearSnacks(tester);
+        expect(find.byKey(const ValueKey('newInvoicePaymentSection')), findsOneWidget);
+        await tapKey(tester, paid ? 'newInvoicePayPaid' : 'newInvoicePayPartial');
+        if (!paid) {
+          await tester.enterText(find.byKey(const ValueKey('newInvoicePaymentAmount')), amount);
+          await tester.pump();
+        }
+        await pickMethod(tester, 'Bank Transfer');
+        final createBtn = find.textContaining('Create Invoice (Ctrl+S)');
+        await tester.ensureVisible(createBtn);
+        await tester.pump();
+        await tester.tap(createBtn);
+        await settle(tester);
+        await settle(tester);
+        expect(tester.takeException(), isNull);
+        final inv = await onlyInvoice(tester);
+        expect(inv.payments, hasLength(1));
+        expect(inv.payments.single.paymentMethod, 'Bank Transfer');
+        if (paid) {
+          expect(inv.payments.single.amountPaid, closeTo(inv.total, 0.001));
+          expect(inv.paymentStatus, PaymentStatus.paid);
+        } else {
+          expect(inv.payments.single.amountPaid, 40);
+          expect(inv.paymentStatus, PaymentStatus.partial);
+          expect(inv.outstandingBalance, closeTo(inv.total - 40, 0.001));
+        }
+      }, timeout: const Timeout(Duration(minutes: 2)));
+    }
+  });
 }

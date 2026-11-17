@@ -25,6 +25,8 @@ import 'package:invoiceo/services/invoice_pdf_services.dart';
 import 'package:invoiceo/services/pdf_service.dart';
 import 'package:invoiceo/common/constants.dart';
 import 'package:invoiceo/utils/formatters.dart';
+import 'package:invoiceo/utils/new_invoice_payment.dart';
+import 'package:invoiceo/widgets/new_invoice_payment_section.dart';
 import 'package:invoiceo/utils/scanner_capture.dart';
 import 'package:invoiceo/services/usage_stats_service.dart';
 import 'package:invoiceo/theme/brand_colors.dart';
@@ -184,6 +186,44 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
   final ScrollController _productDropdownScrollControllerV2 = ScrollController();
 
   String invoiceType = 'Invoice';
+  // The Payment section of a NEW invoice (Unpaid / Partial / Paid): the payment is recorded right after the invoice
+  // is saved. Not kept in drafts. [_liveTotal] is the total shown on screen (set by build).
+  NewInvoicePaymentStatus _payStatus = NewInvoicePaymentStatus.unpaid;
+  String _payMethod = kNewInvoiceDefaultPaymentMethod;
+  final TextEditingController _payAmountController = TextEditingController();
+  final TextEditingController _payNotesController = TextEditingController();
+  NewInvoicePaymentError? _payError;
+  double _liveTotal = 0;
+  bool get _showNewInvoicePayment =>
+      _invoice == null && !isEditing && widget.invoiceToEdit == null && invoiceType == 'Invoice';
+
+  void _resetNewInvoicePayment() {
+    _payStatus = NewInvoicePaymentStatus.unpaid;
+    _payMethod = kNewInvoiceDefaultPaymentMethod;
+    _payAmountController.clear();
+    _payNotesController.clear();
+    _payError = null;
+  }
+
+  Widget _paymentSectionV2() {
+    return NewInvoicePaymentSection(
+      status: _payStatus,
+      onStatusChanged: (v) => setState(() {
+        _payStatus = v;
+        _payError = null;
+      }),
+      method: _payMethod,
+      onMethodChanged: (m) => setState(() => _payMethod = m),
+      amountController: _payAmountController,
+      notesController: _payNotesController,
+      onAmountChanged: () => setState(() => _payError = null),
+      total: _liveTotal,
+      currencySymbol: _currencySymbol,
+      errorText: _payError == null
+          ? null
+          : newInvoicePaymentErrorText(AppLocalizations.of(context)!, _payError!),
+    );
+  }
   String? invoiceTitle;
   double taxRate = Tax.defaultTaxRate;
   Invoice? _invoice;
@@ -399,6 +439,8 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
 
   @override
   void dispose() {
+    _payAmountController.dispose();
+    _payNotesController.dispose();
     _scanner.detach();
     _screenFocusNode.dispose();
     _productSearchFocusNodeV2.dispose();
@@ -1392,6 +1434,25 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
     }
 
     if(!mounted) return false;
+    // A part payment must be more than nothing and less than the total (checked before anything is saved).
+    if (_showNewInvoicePayment && _payStatus == NewInvoicePaymentStatus.partial) {
+      final err = validateNewInvoicePayment(
+          status: _payStatus, amountText: _payAmountController.text, total: _liveTotal);
+      if (err != null) {
+        if (!mounted) return false;
+        setState(() => _payError = err);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(newInvoicePaymentErrorText(AppLocalizations.of(context)!, err)),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            showCloseIcon: true,
+          ),
+        );
+        return false;
+      }
+    }
+
     setState(() => isLoading = true);
 
     try {
@@ -1431,12 +1492,41 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
       await ref.read(invoiceRepositoryProvider).insertInvoice(invoice);
       unawaited(UsageStatsService.onDocumentCreated(invoice.type));
 
+      // Paid / Partial: record the payment now, like the Apply Payment dialog does, then reload the invoice so the
+      // finished page and the printed bill show what was paid (Paid in full, or the balance due).
+      var savedInvoice = invoice;
+      String? paymentFailure;
+      if (_showNewInvoicePayment && _payStatus != NewInvoicePaymentStatus.unpaid) {
+        try {
+          await recordNewInvoicePayment(
+              payments: ref.read(paymentRepositoryProvider),
+              invoice: invoice,
+              status: _payStatus,
+              amountText: _payAmountController.text,
+              method: _payMethod,
+              notes: _payNotesController.text);
+          savedInvoice =
+              await ref.read(invoiceRepositoryProvider).getInvoiceById(invoice.id) ?? invoice;
+        } catch (e) {
+          paymentFailure = e.toString();
+        }
+      }
+
       if (!mounted) return true;
       setState(() {
-        _invoice = invoice;
-        currentInvoiceNumber = invoice.invoiceNumber ?? invoice.id;
+        _invoice = savedInvoice;
+        currentInvoiceNumber = savedInvoice.invoiceNumber ?? savedInvoice.id;
         isLoading = false;
       });
+      if (paymentFailure != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(AppLocalizations.of(context)!.createInvoicePaymentSaveFailed(paymentFailure)),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          showCloseIcon: true,
+          duration: const Duration(seconds: 10),
+        ));
+      }
       _markFormClean();
 
       final l10n = AppLocalizations.of(context)!;
@@ -2359,6 +2449,7 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
       dueDateController.clear();
       _previousBalanceDue = 0.0;
       _isPreviousBalanceLoading = false;
+      _resetNewInvoicePayment();
     });
     await _setAdditionalNote(forceDefault: true);
     _markFormClean();
@@ -3983,6 +4074,7 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
     final tax = totals.tax;
     final invoiceDiscountAmount = totals.invoiceDiscountAmount;
     final total = totals.total;
+    _liveTotal = total;
 
     final bool showingSuccessScreen = !isEditing && _invoice != null;
 
@@ -5875,6 +5967,10 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
                         _buildAdditionalCostsSection(),
                         const SizedBox(height: 12),
                         _invoiceDiscountSectionV2(),
+                        if (_showNewInvoicePayment) ...[
+                          const SizedBox(height: 18),
+                          _paymentSectionV2(),
+                        ],
                         const SizedBox(height: 18),
                         _sectionLabelV2('Notes'),
                         _notesFieldV2(),
@@ -6072,6 +6168,10 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
               _buildAdditionalCostsSection(),
               const SizedBox(height: 12),
               _invoiceDiscountSectionV2(),
+              if (_showNewInvoicePayment) ...[
+                const SizedBox(height: 18),
+                _paymentSectionV2(),
+              ],
               const SizedBox(height: 18),
               _sectionLabelV2('Notes'),
               _notesFieldV2(),

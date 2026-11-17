@@ -3868,5 +3868,64 @@
         "type": "int"
       }
     }
+  },
+  "createInvoicePaymentSectionTitle": "Payment",
+  "@createInvoicePaymentSectionTitle": {
+    "description": "New Invoice form: title of the Payment section (Unpaid / Partial / Paid)"
+  },
+  "createInvoicePaymentUnpaidNote": "No payment is recorded now. You can add one later with Payment.",
+  "@createInvoicePaymentUnpaidNote": {
+    "description": "New Invoice, Payment section: note under Unpaid"
+  },
+  "createInvoicePaymentAmountLabel": "Amount received",
+  "@createInvoicePaymentAmountLabel": {
+    "description": "New Invoice, Payment section: amount box for a part payment"
+  },
+  "createInvoicePaymentBalanceDue": "Balance due after this payment: {amount}",
+  "@createInvoicePaymentBalanceDue": {
+    "description": "New Invoice, Payment section",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "createInvoicePaymentPaidNote": "The full amount ({amount}) will be recorded as paid.",
+  "@createInvoicePaymentPaidNote": {
+    "description": "New Invoice, Payment section",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "createInvoicePaymentAmountRequired": "Enter the amount received",
+  "@createInvoicePaymentAmountRequired": {
+    "description": "New Invoice, Payment section: error"
+  },
+  "createInvoicePaymentAmountTooHigh": "For a part payment, enter less than the total. Choose Paid for the full amount.",
+  "@createInvoicePaymentAmountTooHigh": {
+    "description": "New Invoice, Payment section: error"
+  },
+  "createInvoicePaymentSaveFailed": "The invoice was created, but its payment could not be saved: {error}. Use Payment to add it.",
+  "@createInvoicePaymentSaveFailed": {
+    "description": "New Invoice, Payment section",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "createInvoicePaymentReceivedLine": "Received {received} · Balance due {balance}",
+  "@createInvoicePaymentReceivedLine": {
+    "description": "Created page: what was paid when the invoice was made, part payment",
+    "placeholders": {
+      "received": {
+        "type": "String"
+      },
+      "balance": {
+        "type": "String"
+      }
+    }
   }
 }

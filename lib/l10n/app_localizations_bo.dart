@@ -5821,4 +5821,41 @@ class AppLocalizationsBo extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get createInvoicePaymentSectionTitle => 'Payment';
+
+  @override
+  String get createInvoicePaymentUnpaidNote =>
+      'No payment is recorded now. You can add one later with Payment.';
+
+  @override
+  String get createInvoicePaymentAmountLabel => 'Amount received';
+
+  @override
+  String createInvoicePaymentBalanceDue(String amount) {
+    return 'Balance due after this payment: $amount';
+  }
+
+  @override
+  String createInvoicePaymentPaidNote(String amount) {
+    return 'The full amount ($amount) will be recorded as paid.';
+  }
+
+  @override
+  String get createInvoicePaymentAmountRequired => 'Enter the amount received';
+
+  @override
+  String get createInvoicePaymentAmountTooHigh =>
+      'For a part payment, enter less than the total. Choose Paid for the full amount.';
+
+  @override
+  String createInvoicePaymentSaveFailed(String error) {
+    return 'The invoice was created, but its payment could not be saved: $error. Use Payment to add it.';
+  }
+
+  @override
+  String createInvoicePaymentReceivedLine(String received, String balance) {
+    return 'Received $received · Balance due $balance';
+  }
 }

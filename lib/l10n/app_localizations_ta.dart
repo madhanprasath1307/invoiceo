@@ -5966,4 +5966,42 @@ class AppLocalizationsTa extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get createInvoicePaymentSectionTitle => 'செலுத்துதல்';
+
+  @override
+  String get createInvoicePaymentUnpaidNote =>
+      'இப்போது எந்தக் கட்டணமும் பதிவாகாது. பிறகு \'பணம் செலுத்துதல்\' மூலம் சேர்க்கலாம்.';
+
+  @override
+  String get createInvoicePaymentAmountLabel => 'பெறப்பட்ட தொகை';
+
+  @override
+  String createInvoicePaymentBalanceDue(String amount) {
+    return 'இந்தத் தொகைக்குப் பிறகு மீதம்: $amount';
+  }
+
+  @override
+  String createInvoicePaymentPaidNote(String amount) {
+    return 'முழுத் தொகை ($amount) செலுத்தப்பட்டதாகப் பதிவாகும்.';
+  }
+
+  @override
+  String get createInvoicePaymentAmountRequired =>
+      'பெறப்பட்ட தொகையை உள்ளிடவும்';
+
+  @override
+  String get createInvoicePaymentAmountTooHigh =>
+      'பகுதி கட்டணத்திற்கு, மொத்தத்தை விடக் குறைவாக உள்ளிடவும். முழுத் தொகைக்கு \'செலுத்தப்பட்டது\' என்பதைத் தேர்ந்தெடுக்கவும்.';
+
+  @override
+  String createInvoicePaymentSaveFailed(String error) {
+    return 'விலைப்பட்டியல் உருவாக்கப்பட்டது, ஆனால் கட்டணத்தைச் சேமிக்க முடியவில்லை: $error. \'பணம் செலுத்துதல்\' மூலம் சேர்க்கவும்.';
+  }
+
+  @override
+  String createInvoicePaymentReceivedLine(String received, String balance) {
+    return 'பெறப்பட்டது $received · மீதம் $balance';
+  }
 }

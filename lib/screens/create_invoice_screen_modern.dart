@@ -16,6 +16,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:invoiceo/utils/formatters.dart';
+import 'package:invoiceo/utils/new_invoice_payment.dart';
+import 'package:invoiceo/widgets/new_invoice_payment_section.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -235,6 +237,23 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
   // Right panel: the "Advanced Options" and "Charges & Adjustments" sections.
   bool _advancedOpen = false;
   bool? _chargesOpen; // null = open only when something is filled in
+  // Right panel: the Payment section of a NEW invoice (Unpaid / Partial / Paid). The payment is recorded right after
+  // the invoice is saved. Not kept in drafts.
+  NewInvoicePaymentStatus _payStatus = NewInvoicePaymentStatus.unpaid;
+  String _payMethod = kNewInvoiceDefaultPaymentMethod;
+  final TextEditingController _payAmountController = TextEditingController();
+  final TextEditingController _payNotesController = TextEditingController();
+  NewInvoicePaymentError? _payError;
+  bool get _showNewInvoicePayment =>
+      _invoice == null && !isEditing && widget.invoiceToEdit == null && invoiceType == 'Invoice';
+
+  void _resetNewInvoicePayment() {
+    _payStatus = NewInvoicePaymentStatus.unpaid;
+    _payMethod = kNewInvoiceDefaultPaymentMethod;
+    _payAmountController.clear();
+    _payNotesController.clear();
+    _payError = null;
+  }
   // Inline editing in the items table: one box per item and field.
   final Map<String, _CellBinding> _qtyBindings = {};
   final Map<String, _CellBinding> _priceBindings = {};
@@ -549,6 +568,8 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
 
   @override
   void dispose() {
+    _payAmountController.dispose();
+    _payNotesController.dispose();
     for (final m in [_qtyBindings, _priceBindings, _discBindings]) {
       for (final b in m.values) {
         b.controller.dispose();
@@ -1732,6 +1753,27 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
     }
     if (!_linesNotNegative()) return false;
 
+    // A part payment must be more than nothing and less than the total (checked before anything is saved).
+    if (_showNewInvoicePayment && _payStatus == NewInvoicePaymentStatus.partial) {
+      final err = validateNewInvoicePayment(
+          status: _payStatus,
+          amountText: _payAmountController.text,
+          total: _invoiceFromForm(id: '', number: '').total);
+      if (err != null) {
+        if (!mounted) return false;
+        setState(() => _payError = err);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(newInvoicePaymentErrorText(AppLocalizations.of(context)!, err)),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            showCloseIcon: true,
+          ),
+        );
+        return false;
+      }
+    }
+
     if(!mounted) return false;
     setState(() => isLoading = true);
 
@@ -1749,12 +1791,41 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
         _draftId = null;
       }
 
+      // Paid / Partial: record the payment now, like the Apply Payment dialog does, then reload the invoice so the
+      // finished page and the printed bill show what was paid (Paid in full, or the balance due).
+      var savedInvoice = invoice;
+      String? paymentFailure;
+      if (_showNewInvoicePayment && _payStatus != NewInvoicePaymentStatus.unpaid) {
+        try {
+          await recordNewInvoicePayment(
+              payments: ref.read(paymentRepositoryProvider),
+              invoice: invoice,
+              status: _payStatus,
+              amountText: _payAmountController.text,
+              method: _payMethod,
+              notes: _payNotesController.text);
+          savedInvoice =
+              await ref.read(invoiceRepositoryProvider).getInvoiceById(invoice.id) ?? invoice;
+        } catch (e) {
+          paymentFailure = e.toString();
+        }
+      }
+
       if (!mounted) return true;
       setState(() {
-        _invoice = invoice;
-        currentInvoiceNumber = invoice.invoiceNumber ?? invoice.id;
+        _invoice = savedInvoice;
+        currentInvoiceNumber = savedInvoice.invoiceNumber ?? savedInvoice.id;
         isLoading = false;
       });
+      if (paymentFailure != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(AppLocalizations.of(context)!.createInvoicePaymentSaveFailed(paymentFailure)),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          showCloseIcon: true,
+          duration: const Duration(seconds: 10),
+        ));
+      }
       _markFormClean();
 
       final l10n = AppLocalizations.of(context)!;
@@ -2978,6 +3049,7 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
               _bankAccounts.firstOrNull;
       _loadedItemIds.clear();
       _stockHeldByEdited.clear();
+      _resetNewInvoicePayment();
     });
     await _setAdditionalNote(forceDefault: true);
     _markFormClean();
@@ -4305,6 +4377,10 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
                             style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant)),
                         const SizedBox(height: 16),
                         _successIdChipModern(type),
+                        if (_invoice != null && _invoice!.type == 'Invoice' && _invoice!.payments.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          _successPaymentLineModern(),
+                        ],
                         const SizedBox(height: 18),
                         _successTilesModern(type),
                         if (showSavePrompt) ...[
@@ -4340,6 +4416,30 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
       height: 60,
       decoration: const BoxDecoration(color: Color(0xFF16A34A), shape: BoxShape.circle),
       child: const Icon(Icons.check_rounded, color: Colors.white, size: 36),
+    );
+  }
+
+  /// "PAID IN FULL · Online", or "Received 50.00 · Balance due 68.00": what was paid when the invoice was made.
+  Widget _successPaymentLineModern() {
+    final l10n = AppLocalizations.of(context)!;
+    final inv = _invoice!;
+    final paidInFull = inv.outstandingBalance <= InvoiceCalculator.moneyEpsilon;
+    final method = inv.payments.last.paymentMethod;
+    final methodText = (method == null || method.isEmpty) ? '' : newInvoicePaymentMethodLabel(l10n, method);
+    final text = paidInFull
+        ? [l10n.createInvoicePaidInFullBadge, if (methodText.isNotEmpty) methodText].join(' · ')
+        : l10n.createInvoicePaymentReceivedLine(
+            AppFormatters.formatAmount(inv.amountPaid, _currencySymbol),
+            AppFormatters.formatAmount(inv.outstandingBalance, _currencySymbol));
+    final color = paidInFull ? const Color(0xFF16A34A) : const Color(0xFFD97706);
+    return Container(
+      key: const ValueKey('modernSuccessPayment'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
     );
   }
 
@@ -7286,6 +7386,29 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
     );
   }
 
+  /// The Payment section of a new invoice: Unpaid (nothing is recorded), Partial (amount received) or Paid.
+  Widget _paymentCardModern(double total) {
+    return _flatCardV2(
+      child: NewInvoicePaymentSection(
+        status: _payStatus,
+        onStatusChanged: (v) => setState(() {
+          _payStatus = v;
+          _payError = null;
+        }),
+        method: _payMethod,
+        onMethodChanged: (m) => setState(() => _payMethod = m),
+        amountController: _payAmountController,
+        notesController: _payNotesController,
+        onAmountChanged: () => setState(() => _payError = null),
+        total: total,
+        currencySymbol: _currencySymbol,
+        errorText: _payError == null
+            ? null
+            : newInvoicePaymentErrorText(AppLocalizations.of(context)!, _payError!),
+      ),
+    );
+  }
+
   Widget _totalsCardModern(double tax, double subtotal, double total,
           double grossSubtotal, double totalDiscount, double invoiceDiscountAmount) =>
       Container(
@@ -7309,6 +7432,10 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
                 _invoiceDetailsFormV2(),
                 const SizedBox(height: 12),
                 _chargesCardModern(),
+                if (_showNewInvoicePayment) ...[
+                  const SizedBox(height: 12),
+                  _paymentCardModern(total),
+                ],
               ],
             ),
           ),
@@ -7394,6 +7521,10 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
         _itemsTableSectionV2(expand: false),
         const SizedBox(height: 12),
         _chargesCardModern(),
+        if (_showNewInvoicePayment) ...[
+          const SizedBox(height: 12),
+          _paymentCardModern(total),
+        ],
         const SizedBox(height: 12),
         _totalsCardModern(tax, subtotal, total, grossSubtotal, totalDiscount,
             invoiceDiscountAmount),

@@ -9793,6 +9793,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 minute} other{{count} minutes}}'**
   String autoSignOutMinutesCount(int count);
+
+  /// New Invoice form: title of the Payment section (Unpaid / Partial / Paid)
+  ///
+  /// In en, this message translates to:
+  /// **'Payment'**
+  String get createInvoicePaymentSectionTitle;
+
+  /// New Invoice, Payment section: note under Unpaid
+  ///
+  /// In en, this message translates to:
+  /// **'No payment is recorded now. You can add one later with Payment.'**
+  String get createInvoicePaymentUnpaidNote;
+
+  /// New Invoice, Payment section: amount box for a part payment
+  ///
+  /// In en, this message translates to:
+  /// **'Amount received'**
+  String get createInvoicePaymentAmountLabel;
+
+  /// New Invoice, Payment section
+  ///
+  /// In en, this message translates to:
+  /// **'Balance due after this payment: {amount}'**
+  String createInvoicePaymentBalanceDue(String amount);
+
+  /// New Invoice, Payment section
+  ///
+  /// In en, this message translates to:
+  /// **'The full amount ({amount}) will be recorded as paid.'**
+  String createInvoicePaymentPaidNote(String amount);
+
+  /// New Invoice, Payment section: error
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the amount received'**
+  String get createInvoicePaymentAmountRequired;
+
+  /// New Invoice, Payment section: error
+  ///
+  /// In en, this message translates to:
+  /// **'For a part payment, enter less than the total. Choose Paid for the full amount.'**
+  String get createInvoicePaymentAmountTooHigh;
+
+  /// New Invoice, Payment section
+  ///
+  /// In en, this message translates to:
+  /// **'The invoice was created, but its payment could not be saved: {error}. Use Payment to add it.'**
+  String createInvoicePaymentSaveFailed(String error);
+
+  /// Created page: what was paid when the invoice was made, part payment
+  ///
+  /// In en, this message translates to:
+  /// **'Received {received} · Balance due {balance}'**
+  String createInvoicePaymentReceivedLine(String received, String balance);
 }
 
 class _AppLocalizationsDelegate
