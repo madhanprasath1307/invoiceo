@@ -16,6 +16,7 @@ import 'package:invoiceo/providers/repositories.dart';
 import 'package:uuid/uuid.dart';
 import 'package:invoiceo/models/customer.dart';
 import 'package:invoiceo/models/invoice.dart';
+import 'package:invoiceo/models/invoice_draft.dart';
 import 'package:invoiceo/models/invoice_item.dart';
 import 'package:invoiceo/models/product.dart';
 import 'package:invoiceo/models/additional_cost.dart';
@@ -65,6 +66,13 @@ class CreateInvoiceScreenV2 extends ConsumerStatefulWidget {
   final VoidCallback? onCreateNewInvoice;
   final InvoiceFormGuard? guard;
 
+  /// Set when the form was opened from a saved draft ([cloneFrom] is the draft's content). Saving the draft again
+  /// updates it; creating the document deletes it.
+  final String? draftId;
+
+  /// The Payment choice (Partial / Paid) saved with that draft; null = Unpaid.
+  final DraftPayment? draftPayment;
+
   const CreateInvoiceScreenV2({
     super.key,
     this.invoiceToEdit,
@@ -73,6 +81,8 @@ class CreateInvoiceScreenV2 extends ConsumerStatefulWidget {
     this.initialType,
     this.convertFromQuotationId,
     this.onCreateNewInvoice,
+    this.draftId,
+    this.draftPayment,
     this.guard,
   });
 
@@ -187,7 +197,10 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
 
   String invoiceType = 'Invoice';
   // The Payment section of a NEW invoice (Unpaid / Partial / Paid): the payment is recorded right after the invoice
-  // is saved. Not kept in drafts. [_liveTotal] is the total shown on screen (set by build).
+  // is saved. [_liveTotal] is the total shown on screen (set by build).
+  // The saved draft this form belongs to (null = not saved as a draft yet).
+  late String? _draftId = widget.draftId;
+  bool _savingDraft = false;
   NewInvoicePaymentStatus _payStatus = NewInvoicePaymentStatus.unpaid;
   String _payMethod = kNewInvoiceDefaultPaymentMethod;
   final TextEditingController _payAmountController = TextEditingController();
@@ -196,6 +209,28 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
   double _liveTotal = 0;
   bool get _showNewInvoicePayment =>
       _invoice == null && !isEditing && widget.invoiceToEdit == null && invoiceType == 'Invoice';
+
+  /// The Payment choice to keep in a draft: Partial or Paid on an Invoice; null (Unpaid) keeps nothing.
+  DraftPayment? _draftPaymentFromForm() {
+    if (invoiceType != 'Invoice' || _payStatus == NewInvoicePaymentStatus.unpaid) return null;
+    return DraftPayment(
+      status: _payStatus.name,
+      amountText: _payStatus == NewInvoicePaymentStatus.partial ? _payAmountController.text : '',
+      method: _payMethod,
+      notes: _payNotesController.text,
+    );
+  }
+
+  /// Puts a draft's Payment choice back on the form.
+  void _restoreDraftPayment(DraftPayment? p) {
+    if (p == null) return;
+    final status = NewInvoicePaymentStatus.values.where((v) => v.name == p.status).firstOrNull;
+    if (status == null || status == NewInvoicePaymentStatus.unpaid) return;
+    _payStatus = status;
+    _payMethod = kNewInvoicePaymentMethods.contains(p.method) ? p.method : kNewInvoiceDefaultPaymentMethod;
+    _payAmountController.text = status == NewInvoicePaymentStatus.partial ? p.amountText : '';
+    _payNotesController.text = p.notes;
+  }
 
   void _resetNewInvoicePayment() {
     _payStatus = NewInvoicePaymentStatus.unpaid;
@@ -274,6 +309,7 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
     _scanner = ScannerCapture(isActive: _scannerActive, onScan: _handleScannedCode)
       ..attach();
     widget.guard?.canLeave = _confirmLeaveIfDirty;
+    widget.guard?.saveDraftOnTimeout = _saveDraftOnTimeout;
     // V2: close the inline product dropdown a beat after the field loses
     // focus, so a tap on a dropdown row still registers as a selection
     // before the list disappears.
@@ -398,6 +434,19 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
             src.invoiceDiscountValue.toStringAsFixed(2);
       }
       // date stays as today; currentInvoiceNumber is generated in _loadCustomersAndProducts
+      if (widget.draftId != null) {
+        // A draft comes back exactly as it was saved (a duplicate starts fresh): its dates, the PDF number, the
+        // custom fields and the Payment choice too.
+        _restoreDraftPayment(widget.draftPayment);
+        _selectedOrderDate = src.date;
+        _selectedDueDate = src.dueDate;
+        _hideInvoiceNumber = src.hideInvoiceNumber;
+        customInvoiceNumberController.text = src.customInvoiceNumber ?? '';
+        _customFieldValues = {
+          for (final cf in src.customFields) cf.defId: cf.value,
+        };
+        invoiceTitle = src.invoiceTitle;
+      }
     }
   }
 
@@ -409,6 +458,10 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
         oldWidget.guard?.canLeave = null;
       }
       widget.guard?.canLeave = _confirmLeaveIfDirty;
+      if (oldWidget.guard?.saveDraftOnTimeout == _saveDraftOnTimeout) {
+        oldWidget.guard?.saveDraftOnTimeout = null;
+      }
+      widget.guard?.saveDraftOnTimeout = _saveDraftOnTimeout;
     }
   }
 
@@ -449,6 +502,9 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
     _customerSearchDebounce?.cancel();
     if (widget.guard?.canLeave == _confirmLeaveIfDirty) {
       widget.guard?.canLeave = null;
+    }
+    if (widget.guard?.saveDraftOnTimeout == _saveDraftOnTimeout) {
+      widget.guard?.saveDraftOnTimeout = null;
     }
     notesController.dispose();
     customInvoiceNumberController.dispose();
@@ -570,6 +626,14 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
             onPressed: () => Navigator.pop(dialogContext, 'discard'),
             child: Text(AppLocalizations.of(context)!.actionDiscard),
           ),
+          // A new document can be kept as a draft instead (not when editing a saved one).
+          if (widget.invoiceToEdit == null)
+            OutlinedButton.icon(
+              key: const ValueKey('leaveSaveDraft'),
+              onPressed: () => Navigator.pop(dialogContext, 'draft'),
+              icon: const Icon(Icons.description_outlined, size: 18),
+              label: Text(AppLocalizations.of(context)!.mInvSaveDraft),
+            ),
           ElevatedButton.icon(
             onPressed: () => Navigator.pop(dialogContext, 'save'),
             icon: const Icon(Icons.save_rounded, size: 18),
@@ -582,6 +646,8 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
     switch (action) {
       case 'discard':
         return true;
+      case 'draft':
+        return await _saveDraft();
       case 'save':
         return widget.invoiceToEdit != null
             ? await _updateInvoice()
@@ -1392,6 +1458,94 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
     );
   }
 
+  /// The document as the form describes it right now. [id] / [number] are the real ones when creating; a draft
+  /// has none.
+  Invoice _invoiceFromForm({required String id, String? number}) => Invoice(
+        id: id,
+        invoiceNumber: number,
+        customer: _resolveInvoiceCustomer(),
+        items: List.from(invoiceItems),
+        date: _selectedOrderDate,
+        dueDate: _selectedDueDate,
+        notes: notesController.text.isNotEmpty ? notesController.text : null,
+        taxRate: _taxMode == TaxMode.global ? taxRate : 0.0,
+        type: invoiceType,
+        invoiceTitle: invoiceType == 'Invoice' ? invoiceTitle : null,
+        currencyCode: _currencyCode,
+        currencySymbol: _currencySymbol,
+        taxMode: _taxMode,
+        isInterState: _isInterState,
+        upiId: _selectedUpi?.id,
+        bankAccountId: _selectedBankAccount?.accountNumber,
+        quantityLabel:
+            _quantityLabel.trim().isEmpty ? null : _quantityLabel.trim(),
+        additionalCosts: _buildAdditionalCosts(),
+        customFields: _buildCustomFields(),
+        invoiceDiscountType: _invoiceDiscountType,
+        invoiceDiscountValue: _invoiceDiscountValue,
+        hideInvoiceNumber: _hideInvoiceNumber,
+        customInvoiceNumber: customInvoiceNumberController.text.trim().isEmpty
+            ? null
+            : customInvoiceNumberController.text.trim(),
+        convertedFromInvoiceId: widget.convertFromQuotationId,
+      );
+
+  /// "Save Draft": keeps the form in the drafts table (not an invoice: no number, no stock taken, not in reports).
+  /// Saving again updates the same draft. True when it was saved. [quiet]: no messages (nobody is there).
+  Future<bool> _saveDraft({bool quiet = false}) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (_savingDraft) return false;
+    if (invoiceItems.isEmpty && nameController.text.trim().isEmpty) {
+      if (quiet) return false;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(l10n.mInvNothingToSave), behavior: SnackBarBehavior.floating, showCloseIcon: true));
+      return false;
+    }
+    setState(() => _savingDraft = true);
+    try {
+      final repo = ref.read(invoiceDraftRepositoryProvider);
+      final id = _draftId ?? repo.newId();
+      await repo.saveDraft(InvoiceDraft(
+          id: id,
+          invoice: _invoiceFromForm(id: ''),
+          updatedAt: DateTime.now(),
+          payment: _draftPaymentFromForm()));
+      if (!mounted) return true;
+      setState(() => _draftId = id);
+      _markFormClean();
+      if (quiet) return true;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Row(children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 12),
+            Text(l10n.mInvDraftSaved),
+          ]),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          // above the bottom bar, so its buttons stay usable
+          margin: const EdgeInsets.fromLTRB(24, 0, 24, 96),
+          duration: const Duration(seconds: 2),
+          showCloseIcon: true));
+      return true;
+    } finally {
+      if (mounted) setState(() => _savingDraft = false);
+    }
+  }
+
+  /// The session timed out (see [InvoiceFormGuard.saveDraftOnTimeout]): keep a new, changed form as a draft without
+  /// asking. A saved document being edited keeps its last saved copy.
+  Future<void> _saveDraftOnTimeout() async {
+    if (!mounted || widget.invoiceToEdit != null || isEditing) return;
+    if (isLoading || !_hasUnsavedChanges) return;
+    if (invoiceItems.isEmpty && nameController.text.trim().isEmpty) return;
+    try {
+      await _saveDraft(quiet: true);
+    } catch (e) {
+      // Logging out must still go ahead.
+      debugPrint('Could not save the draft on timeout: $e');
+    }
+  }
+
   Future<bool> _createInvoice() async {
     if (nameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1459,38 +1613,15 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
       final invoiceId = await InvoicePdfServices.generateNextId();
       final invoiceNumber =
           await InvoicePdfServices.generateNextInvoiceNumber(invoiceType);
-      final invoice = Invoice(
-        id: invoiceId,
-        invoiceNumber: invoiceNumber,
-        customer: _resolveInvoiceCustomer(),
-        items: List.from(invoiceItems),
-        date: _selectedOrderDate,
-        dueDate: _selectedDueDate,
-        notes: notesController.text.isNotEmpty ? notesController.text : null,
-        taxRate: _taxMode == TaxMode.global ? taxRate : 0.0,
-        type: invoiceType,
-        invoiceTitle: invoiceType == 'Invoice' ? invoiceTitle : null,
-        currencyCode: _currencyCode,
-        currencySymbol: _currencySymbol,
-        taxMode: _taxMode,
-        isInterState: _isInterState,
-        upiId: _selectedUpi?.id,
-        bankAccountId: _selectedBankAccount?.accountNumber,
-        quantityLabel:
-            _quantityLabel.trim().isEmpty ? null : _quantityLabel.trim(),
-        additionalCosts: _buildAdditionalCosts(),
-        customFields: _buildCustomFields(),
-        invoiceDiscountType: _invoiceDiscountType,
-        invoiceDiscountValue: _invoiceDiscountValue,
-        hideInvoiceNumber: _hideInvoiceNumber,
-        customInvoiceNumber: customInvoiceNumberController.text.trim().isEmpty
-            ? null
-            : customInvoiceNumberController.text.trim(),
-        convertedFromInvoiceId: widget.convertFromQuotationId,
-      );
+      final invoice = _invoiceFromForm(id: invoiceId, number: invoiceNumber);
 
       await ref.read(invoiceRepositoryProvider).insertInvoice(invoice);
       unawaited(UsageStatsService.onDocumentCreated(invoice.type));
+      final draftId = _draftId;
+      if (draftId != null) {
+        await ref.read(invoiceDraftRepositoryProvider).deleteDraft(draftId);
+        _draftId = null;
+      }
 
       // Paid / Partial: record the payment now, like the Apply Payment dialog does, then reload the invoice so the
       // finished page and the printed bill show what was paid (Paid in full, or the balance due).
@@ -2449,6 +2580,7 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
       dueDateController.clear();
       _previousBalanceDue = 0.0;
       _isPreviousBalanceLoading = false;
+      _draftId = null;
       _resetNewInvoicePayment();
     });
     await _setAdditionalNote(forceDefault: true);
@@ -3567,6 +3699,7 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
     required Color color,
     required VoidCallback? onPressed,
     String? tooltip,
+    Key? buttonKey,
   }) {
     return Column(
       children: [
@@ -3578,6 +3711,7 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
             borderRadius: BorderRadius.circular(AppBorderRadius.xsmall),
           ),
           child: IconButton(
+            key: buttonKey,
             icon: Icon(icon),
             color: onPressed != null ? color : Theme.of(context).colorScheme.onSurfaceVariant,
             iconSize: 28,
@@ -3789,6 +3923,30 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
     );
   }
 
+  /// "PAID IN FULL · Online", or "Received 50.00 · Balance due 68.00": what was paid when the invoice was made.
+  Widget _successPaymentLine() {
+    final l10n = AppLocalizations.of(context)!;
+    final inv = _invoice!;
+    final paidInFull = inv.outstandingBalance <= InvoiceCalculator.moneyEpsilon;
+    final method = inv.payments.last.paymentMethod;
+    final methodText = (method == null || method.isEmpty) ? '' : newInvoicePaymentMethodLabel(l10n, method);
+    final text = paidInFull
+        ? [l10n.createInvoicePaidInFullBadge, if (methodText.isNotEmpty) methodText].join(' · ')
+        : l10n.createInvoicePaymentReceivedLine(
+            AppFormatters.formatAmount(inv.amountPaid, _currencySymbol),
+            AppFormatters.formatAmount(inv.outstandingBalance, _currencySymbol));
+    final color = paidInFull ? const Color(0xFF16A34A) : const Color(0xFFD97706);
+    return Container(
+      key: const ValueKey('standardSuccessPayment'),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: color)),
+    );
+  }
+
   Widget _invoiceSuccessCard() {
     return Center(
       child: Card(
@@ -3854,6 +4012,10 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
                     ),
                   ),
                 ),
+                if (_invoice != null && _invoice!.type == 'Invoice' && _invoice!.payments.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _successPaymentLine(),
+                ],
                 const SizedBox(height: 32),
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -4165,7 +4327,7 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
                                   ? AppLocalizations.of(context)!.createInvoiceEditTitle(_invoiceTypeLabel(invoiceType))
                                   : widget.convertFromQuotationId != null
                                       ? AppLocalizations.of(context)!.createInvoiceConvertTitle
-                                      : widget.cloneFrom != null
+                                      : widget.cloneFrom != null && widget.draftId == null
                                           ? AppLocalizations.of(context)!.createInvoiceDuplicateAsTitle(_invoiceTypeLabel(invoiceType))
                                           : AppLocalizations.of(context)!.createInvoiceAppBarTitle(_invoiceTypeLabel(invoiceType)),
                           overflow: TextOverflow.ellipsis,
@@ -5948,44 +6110,50 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
 
   Widget _rightPanelV2(double tax, double subtotal, double total,
       double grossSubtotal, double totalDiscount, double invoiceDiscountAmount) {
+    // The invoice details and the cards under them scroll together (a short window used to leave the cards a strip
+    // of about 100 px, which hid the Payment section); the totals stay pinned underneath.
     return Column(
       children: [
-        _invoiceDetailsFormV2(),
-        AppSpacing.hSmall,
         Expanded(
-          child: Container(
-            decoration: _flatCardDecorationV2(context),
-            clipBehavior: Clip.antiAlias,
+          child: SingleChildScrollView(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(AppPadding.medium),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildAdditionalCostsSection(),
-                        const SizedBox(height: 12),
-                        _invoiceDiscountSectionV2(),
-                        if (_showNewInvoicePayment) ...[
-                          const SizedBox(height: 18),
-                          _paymentSectionV2(),
-                        ],
+                _invoiceDetailsFormV2(),
+                AppSpacing.hSmall,
+                Container(
+                  decoration: _flatCardDecorationV2(context),
+                  clipBehavior: Clip.antiAlias,
+                  padding: const EdgeInsets.all(AppPadding.medium),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildAdditionalCostsSection(),
+                      const SizedBox(height: 12),
+                      _invoiceDiscountSectionV2(),
+                      if (_showNewInvoicePayment) ...[
                         const SizedBox(height: 18),
-                        _sectionLabelV2('Notes'),
-                        _notesFieldV2(),
-                        const SizedBox(height: 18),
-                        _sectionLabelV2('Tax settings'),
-                        _taxSettingsSectionV2(),
+                        _paymentSectionV2(),
                       ],
-                    ),
+                      const SizedBox(height: 18),
+                      _sectionLabelV2('Notes'),
+                      _notesFieldV2(),
+                      const SizedBox(height: 18),
+                      _sectionLabelV2('Tax settings'),
+                      _taxSettingsSectionV2(),
+                    ],
                   ),
                 ),
-                _totalsFooterV2(tax, subtotal, total, grossSubtotal,
-                    totalDiscount, invoiceDiscountAmount),
               ],
             ),
           ),
+        ),
+        AppSpacing.hSmall,
+        Container(
+          decoration: _flatCardDecorationV2(context),
+          clipBehavior: Clip.antiAlias,
+          child: _totalsFooterV2(tax, subtotal, total, grossSubtotal,
+              totalDiscount, invoiceDiscountAmount),
         ),
       ],
     );
@@ -6022,6 +6190,15 @@ class _CreateInvoiceScreenV2State extends ConsumerState<CreateInvoiceScreenV2> {
                   spacing: 10,
                   runSpacing: 8,
                   children: [
+                    if (!isEditMode && _invoice == null)
+                      _buildActionButton(
+                        buttonKey: const ValueKey('standardSaveDraft'),
+                        icon: Icons.description_outlined,
+                        label: AppLocalizations.of(context)!.quotationStatusDraft,
+                        tooltip: AppLocalizations.of(context)!.mInvSaveDraft,
+                        color: Colors.orange,
+                        onPressed: _savingDraft || isLoading ? null : _saveDraft,
+                      ),
                     _buildActionButton(
                       icon: Icons.visibility_outlined,
                       label: AppLocalizations.of(context)!.actionView,

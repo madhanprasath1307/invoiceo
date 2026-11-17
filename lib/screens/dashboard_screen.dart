@@ -28,6 +28,7 @@ import 'package:invoiceo/database/company_registry_service.dart';
 import 'package:invoiceo/models/company_profile.dart';
 import 'package:invoiceo/screens/settings/company_management_screen.dart';
 import 'package:invoiceo/utils/company_switch_navigation.dart';
+import 'package:invoiceo/utils/contact_support.dart';
 import 'package:invoiceo/screens/help/help_search_screen.dart';
 import 'package:invoiceo/screens/settings/settings_screen.dart';
 import 'package:invoiceo/services/invoice_pdf_services.dart';
@@ -94,6 +95,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   BusinessType _businessType = BusinessType.both;
   // The saved draft open in the create form (null = none).
   String? _draftId;
+  // The Payment choice kept with that draft (null = Unpaid).
+  DraftPayment? _draftPayment;
   // Part of the create form's key: bumped by "New Invoice" (sidebar, + menu,
   // Ctrl+Q) so a fresh form is built even when page 1 is already open.
   int _formSeq = 0;
@@ -447,6 +450,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             invoiceToEdit = null;
             _invoiceToClone = null;
             _draftId = null;
+            _draftPayment = null;
             _newInvoiceType = 'Invoice';
             _convertSourceQuotationId = null;
           });
@@ -457,6 +461,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         return _page(
           () => CreateInvoiceScreenV2(
             key: createInvoiceKey,
+            draftId: _draftId,
+            draftPayment: _draftPayment,
             invoiceToEdit: invoiceToEdit,
             cloneFrom: _invoiceToClone,
             cloneType: _invoiceToClone != null ? _cloneType : null,
@@ -468,6 +474,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           modern: () => CreateInvoiceScreenModern(
             key: createInvoiceKey,
             draftId: _draftId,
+            draftPayment: _draftPayment,
             onGoToList: (type) => _selectTab(_listPageFor(type)),
             onBack: () => _selectTab(_listPageFor(invoiceToEdit?.type ??
                 (_invoiceToClone != null
@@ -545,6 +552,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       invoiceToEdit = invoice;
       _invoiceToClone = null;
       _draftId = null;
+      _draftPayment = null;
       _convertSourceQuotationId = null;
     });
     _shortcutsFocusNode.unfocus();
@@ -562,6 +570,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       invoiceToEdit = null;
       _invoiceToClone = invoice;
       _draftId = null;
+      _draftPayment = null;
       _cloneType = type;
       _convertSourceQuotationId = null;
     });
@@ -586,6 +595,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       invoiceToEdit = null;
       _invoiceToClone = null;
       _draftId = null;
+      _draftPayment = null;
       _newInvoiceType = type;
       _convertSourceQuotationId = null;
       // Always a fresh form, also from the Created screen or after Discard.
@@ -606,6 +616,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       invoiceToEdit = null;
       _invoiceToClone = quotation;
       _draftId = null;
+      _draftPayment = null;
       _cloneType = 'Invoice';
       _convertSourceQuotationId = quotation.id;
     });
@@ -628,6 +639,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         invoiceToEdit = null;
         _invoiceToClone = null;
         _draftId = null;
+        _draftPayment = null;
         _newInvoiceType = 'Invoice';
         _convertSourceQuotationId = null;
         _formSeq++;
@@ -659,12 +671,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         invoiceToEdit = null;
         _invoiceToClone = null;
         _draftId = null;
+        _draftPayment = null;
         _convertSourceQuotationId = null;
       } else {
         // Nav-rail "New Invoice" always means a plain, blank invoice.
         _newInvoiceType = 'Invoice';
         _invoiceToClone = null;
         _draftId = null;
+        _draftPayment = null;
         _convertSourceQuotationId = null;
       }
     });
@@ -804,7 +818,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         _ => 2,
       };
 
-  /// Opens a saved draft in the create form (Modern layout's Save Draft).
+  /// Opens a saved draft in the create form (Save Draft, either layout).
   Future<void> _openDraft(InvoiceDraft draft) async {
     if (!await _canLeaveInvoiceForm()) return;
     if (!mounted) return;
@@ -814,6 +828,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       _invoiceToClone = draft.invoice;
       _cloneType = draft.type;
       _draftId = draft.id;
+      _draftPayment = draft.payment;
       // A saved conversion keeps its quotation, so Create still links (and
       // stamps) it and the quotation cannot be converted twice.
       _convertSourceQuotationId = draft.invoice.convertedFromInvoiceId;
@@ -847,6 +862,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             mode: LaunchMode.externalApplication);
       case ModernUserAction.help:
         showHelpSearchDialog(context);
+      case ModernUserAction.support:
+        contactSupport();
       case ModernUserAction.logout:
         _logoutAndResetSession();
     }

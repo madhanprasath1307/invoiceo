@@ -1851,6 +1851,11 @@ void main() {
         final inv = await onlyInvoice(tester);
         expect(inv.payments, hasLength(1));
         expect(inv.payments.single.paymentMethod, 'Bank Transfer');
+        // The Created page says what was paid.
+        final line = find.byKey(const ValueKey('standardSuccessPayment'));
+        expect(line, findsOneWidget);
+        expect(find.descendant(of: line, matching: find.textContaining(paid ? 'PAID IN FULL' : 'Balance due')),
+            findsOneWidget);
         if (paid) {
           expect(inv.payments.single.amountPaid, closeTo(inv.total, 0.001));
           expect(inv.paymentStatus, PaymentStatus.paid);
@@ -1861,5 +1866,185 @@ void main() {
         }
       }, timeout: const Timeout(Duration(minutes: 2)));
     }
+
+    testWidgets('Save Draft keeps the Payment choice; Continue brings it back and Create records it', (tester) async {
+      await openApp(tester, seed: seedShop);
+      await nav(tester, 'New Invoice');
+      await walkIn(tester, 'Draft Pay');
+      await addItem(tester, 'Basmati');
+      await clearSnacks(tester);
+      await tapKey(tester, 'newInvoicePayPartial');
+      await tester.enterText(find.byKey(const ValueKey('newInvoicePaymentAmount')), '40');
+      await tester.pump();
+      await pickMethod(tester, 'Cheque');
+      await tester.enterText(find.byKey(const ValueKey('newInvoicePaymentNotes')), 'chq 77');
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('modernSaveDraft')));
+      await settle(tester);
+      final d = (await db(tester, () => InvoiceDraftService.getDrafts('Invoice'))).single;
+      expect(d.payment!.status, 'partial');
+      expect(d.payment!.amountText, '40');
+      expect(d.payment!.method, 'Check');
+      expect(await db(tester, InvoiceService.getAllInvoices), isEmpty, reason: 'a draft records no payment');
+
+      await nav(tester, 'Invoices');
+      await tester.tap(find.byKey(const ValueKey('modernTabDrafts')));
+      await settle(tester);
+      await tester.tap(find.byKey(ValueKey('draftContinue_${d.id}')));
+      await settle(tester);
+      await clearSnacks(tester);
+      expect(find.byKey(const ValueKey('newInvoicePaymentSection')), findsOneWidget);
+      expect(tester.widget<TextField>(find.byKey(const ValueKey('newInvoicePaymentAmount'))).controller!.text, '40');
+      expect(methodShown(tester), 'Check');
+      expect(tester.widget<TextField>(find.byKey(const ValueKey('newInvoicePaymentNotes'))).controller!.text, 'chq 77');
+      await create(tester);
+      final inv = await byNumber(tester, (await onlyInvoice(tester)).invoiceNumber!);
+      expect(inv.payments, hasLength(1));
+      expect(inv.payments.single.amountPaid, 40);
+      expect(inv.payments.single.paymentMethod, 'Check');
+      expect(inv.payments.single.notes, 'chq 77');
+      expect(inv.paymentStatus, PaymentStatus.partial);
+      expect(await db(tester, () => InvoiceDraftService.countDrafts('Invoice')), 0);
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    testWidgets('a draft saved as Unpaid comes back Unpaid', (tester) async {
+      await openApp(tester, seed: seedShop);
+      await nav(tester, 'New Invoice');
+      await walkIn(tester, 'Draft Unpaid');
+      await addItem(tester, 'Basmati');
+      await tester.tap(find.byKey(const ValueKey('modernSaveDraft')));
+      await settle(tester);
+      final d = (await db(tester, () => InvoiceDraftService.getDrafts('Invoice'))).single;
+      expect(d.payment, isNull);
+      await nav(tester, 'Invoices');
+      await tester.tap(find.byKey(const ValueKey('modernTabDrafts')));
+      await settle(tester);
+      await tester.tap(find.byKey(ValueKey('draftContinue_${d.id}')));
+      await settle(tester);
+      await clearSnacks(tester);
+      expect(find.byKey(const ValueKey('newInvoicePaymentUnpaidNote')), findsOneWidget);
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    // Standard layout: Save Draft (button and the "leave" prompt), the Drafts section of the Invoices list,
+    // Continue and Create, with the Payment choice kept.
+    Future<void> standardFill(WidgetTester tester) async {
+      await tester.tap(find.byIcon(Icons.receipt_outlined));
+      await settle(tester);
+      await tester.enterText(find.widgetWithText(TextField, 'Customer Name *'), 'Standard Sam');
+      await tester.pump();
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump();
+      const keys = {'0': LogicalKeyboardKey.digit0, '1': LogicalKeyboardKey.digit1, '6': LogicalKeyboardKey.digit6};
+      for (final ch in '1006'.split('')) {
+        await tester.sendKeyDownEvent(keys[ch]!, character: ch);
+        await tester.sendKeyUpEvent(keys[ch]!);
+        await tester.pump(const Duration(milliseconds: 5));
+      }
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.enter);
+      await tester.pump(const Duration(milliseconds: 700));
+      await settle(tester);
+      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Add')));
+      await settle(tester);
+      await clearSnacks(tester);
+    }
+
+    testWidgets('Standard layout: Save Draft keeps the form and the Payment choice; Continue and Create', (tester) async {
+      await openApp(tester, layout: UiLayout.standard, seed: seedShop);
+      await standardFill(tester);
+      await tapKey(tester, 'newInvoicePayPartial');
+      await tester.enterText(find.byKey(const ValueKey('newInvoicePaymentAmount')), '40');
+      await tester.pump();
+      await pickMethod(tester, 'Cheque');
+      await tester.enterText(find.byKey(const ValueKey('newInvoicePaymentNotes')), 'chq 9');
+      await tester.pump();
+      await tapKey(tester, 'standardSaveDraft');
+      await settle(tester);
+      expect(find.text('Draft saved'), findsOneWidget);
+      final d = (await db(tester, () => InvoiceDraftService.getDrafts('Invoice'))).single;
+      expect(d.customerName, 'Standard Sam');
+      expect(d.payment!.status, 'partial');
+      expect(d.payment!.amountText, '40');
+      expect(d.payment!.method, 'Check');
+      expect(await db(tester, InvoiceService.getAllInvoices), isEmpty, reason: 'a draft is not an invoice');
+      expect(await stockOf(tester, 'rice'), 50, reason: 'a draft takes no stock');
+
+      // Saved: leaving asks nothing. The Invoices list shows the draft.
+      await tester.tap(find.byIcon(Icons.receipt_long_outlined));
+      await settle(tester);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byKey(const ValueKey('draftsSection')), findsOneWidget);
+      await tester.tap(find.byKey(ValueKey('draftContinue_${d.id}')));
+      await settle(tester);
+      await clearSnacks(tester);
+      expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Customer Name *')).controller!.text,
+          'Standard Sam');
+      expect(find.textContaining('Duplicate'), findsNothing, reason: 'a draft is not shown as a duplicate');
+      expect(tester.widget<TextField>(find.byKey(const ValueKey('newInvoicePaymentAmount'))).controller!.text, '40');
+      expect(methodShown(tester), 'Check');
+      expect(tester.widget<TextField>(find.byKey(const ValueKey('newInvoicePaymentNotes'))).controller!.text, 'chq 9');
+
+      final createBtn = find.textContaining('Create Invoice (Ctrl+S)');
+      await tester.ensureVisible(createBtn);
+      await tester.pump();
+      await tester.tap(createBtn);
+      await settle(tester);
+      await settle(tester);
+      expect(tester.takeException(), isNull);
+      final inv = await onlyInvoice(tester);
+      expect(inv.payments, hasLength(1));
+      expect(inv.payments.single.amountPaid, 40);
+      expect(inv.payments.single.paymentMethod, 'Check');
+      expect(await db(tester, () => InvoiceDraftService.countDrafts('Invoice')), 0, reason: 'creating deletes the draft');
+      expect(await stockOf(tester, 'rice'), 49);
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    testWidgets('Standard layout: leaving a changed new form offers Save Draft', (tester) async {
+      await openApp(tester, layout: UiLayout.standard, seed: seedShop);
+      await standardFill(tester);
+      await tester.tap(find.byIcon(Icons.people_outline));
+      await settle(tester);
+      expect(find.byType(AlertDialog), findsOneWidget, reason: 'unsaved changes prompt');
+      expect(find.byKey(const ValueKey('leaveSaveDraft')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('leaveSaveDraft')));
+      await settle(tester);
+      await settle(tester);
+      expect(tester.takeException(), isNull);
+      final drafts = await db(tester, () => InvoiceDraftService.getDrafts('Invoice'));
+      expect(drafts, hasLength(1));
+      expect(drafts.single.customerName, 'Standard Sam');
+      expect(drafts.single.payment, isNull, reason: 'Unpaid keeps nothing');
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(await db(tester, InvoiceService.getAllInvoices), isEmpty);
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    testWidgets('Standard layout, short window: the Payment section is easy to reach and "Draft saved" leaves the buttons free',
+        (tester) async {
+      await openApp(tester, layout: UiLayout.standard, seed: seedShop, size: const Size(1280, 726));
+      await standardFill(tester);
+      // The whole right panel scrolls as one, so the panel's scroll area is tall (it used to be a ~110 px strip).
+      final scroll = find.ancestor(
+          of: find.byKey(const ValueKey('newInvoicePaymentSection')), matching: find.byType(SingleChildScrollView));
+      expect(scroll, findsWidgets);
+      final viewport = tester.getSize(scroll.first);
+      expect(viewport.height, greaterThan(300), reason: 'the scroll area of the right panel');
+      await tester.ensureVisible(find.byKey(const ValueKey('newInvoicePaymentSection')));
+      await tester.pump();
+      final top = tester.getRect(find.byKey(const ValueKey('newInvoicePaymentSection'))).top;
+      final bottom = tester.getRect(find.byKey(const ValueKey('newInvoicePaymentSection'))).bottom;
+      final scrollRect = tester.getRect(scroll.first);
+      expect(top, greaterThanOrEqualTo(scrollRect.top - 1));
+      expect(bottom, lessThanOrEqualTo(scrollRect.bottom + 1), reason: 'the whole Payment section fits in view');
+
+      // "Draft saved" sits above the bottom button row.
+      await tapKey(tester, 'standardSaveDraft');
+      await tester.pump(const Duration(milliseconds: 1000));
+      final bar = find.byType(SnackBar);
+      expect(bar, findsOneWidget);
+      final barRect = tester.getRect(find.descendant(of: bar, matching: find.text('Draft saved')));
+      final draftBtn = tester.getRect(find.byKey(const ValueKey('standardSaveDraft')));
+      expect(barRect.bottom, lessThanOrEqualTo(draftBtn.top + 1), reason: 'the message does not cover the buttons');
+      expect(tester.takeException(), isNull);
+    }, timeout: const Timeout(Duration(minutes: 2)));
   });
 }

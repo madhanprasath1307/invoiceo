@@ -6,12 +6,16 @@
 //    language globe (the language is chosen in Settings), no notification bell.
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
+import 'package:invoiceo/common/app_config.dart';
 import 'package:invoiceo/common/common.dart';
 import 'package:invoiceo/database/database_helper.dart';
 import 'package:invoiceo/l10n/app_localizations.dart';
@@ -28,6 +32,19 @@ import 'package:invoiceo/repositories/sqlite/sqlite_payment_repository.dart';
 import 'package:invoiceo/repositories/sqlite/sqlite_settings_repository.dart';
 import 'package:invoiceo/screens/dashboard_screen.dart';
 import 'package:invoiceo/services/backend_services.dart';
+
+class _FakeLauncher extends UrlLauncherPlatform with MockPlatformInterfaceMixin {
+  final opened = <String>[];
+  @override
+  get linkDelegate => null;
+  @override
+  Future<bool> canLaunch(String url) async => true;
+  @override
+  Future<bool> launchUrl(String url, LaunchOptions options) async {
+    opened.add(url);
+    return true;
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -309,16 +326,19 @@ void main() {
       expect(find.byKey(const ValueKey('modernCreateMenu')), findsOneWidget);
     });
 
-    testWidgets('has search, plus and the user; NO language globe, NO bell, NO help button', (tester) async {
+    testWidgets('has search, support icon, plus and the user; NO language globe, NO bell', (tester) async {
       tester.view.physicalSize = const Size(1200, 700);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(bar());
       expect(find.text('Search anything... (Ctrl+K)'), findsOneWidget);
       expect(find.byKey(const ValueKey('modernCreateMenu')), findsOneWidget);
-      expect(find.byKey(const ValueKey('modernHelpButton')), findsNothing,
-          reason: 'Help & Support is in the sidebar');
+      expect(find.byKey(const ValueKey('modernHelpButton')), findsNothing);
       expect(find.byIcon(Icons.help_outline), findsNothing);
+      expect(find.byKey(const ValueKey('modernSupport')), findsOneWidget, reason: 'the support icon');
+      expect(tester.getRect(find.byKey(const ValueKey('modernSupport'))).right,
+          lessThan(tester.getRect(find.byKey(const ValueKey('modernCreateMenu'))).left));
+      expect(find.text('Contact Support'), findsNothing, reason: 'icon only; the name shows on hover');
       expect(find.text('admin'), findsOneWidget);
       expect(find.text('Admin'), findsOneWidget);
       // No language globe: the language is chosen in Settings.
@@ -357,6 +377,38 @@ void main() {
       expect(ModernCreate.invoice.type, 'Invoice');
       expect(ModernCreate.quotation.type, 'Quotation');
       expect(ModernCreate.receipt.type, 'Receipt');
+    });
+
+    testWidgets('the support icon is on every page, shows its name on hover and opens the support form',
+        (tester) async {
+      tester.view.physicalSize = const Size(1200, 700);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final actions = <ModernUserAction>[];
+      for (final page in [0, 2, 5, 8]) {
+        await tester.pumpWidget(bar(page: page, pageTitle: 'Page $page', onUserAction: actions.add));
+        expect(find.byKey(const ValueKey('modernSupport')), findsOneWidget, reason: 'page $page');
+        expect(tester.widget<IconButton>(find.byKey(const ValueKey('modernSupport'))).tooltip, 'Contact Support');
+        final icon = tester.widget<Icon>(find.descendant(
+            of: find.byKey(const ValueKey('modernSupport')), matching: find.byType(Icon)));
+        expect(icon.color, Theme.of(tester.element(find.byKey(const ValueKey('modernSupport')))).primaryColor,
+            reason: 'the support icon is in the brand blue');
+        expect(tester.takeException(), isNull, reason: 'page $page');
+      }
+      // Hover shows the name.
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(tester.getCenter(find.byKey(const ValueKey('modernSupport'))));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+      expect(find.text('Contact Support'), findsOneWidget);
+      await mouse.moveTo(const Offset(5, 600));
+      await tester.pump();
+      // A tap opens the support request form directly (not the Help & Support dialog).
+      await tester.tap(find.byKey(const ValueKey('modernSupport')));
+      await tester.pump();
+      expect(actions, [ModernUserAction.support]);
     });
 
     testWidgets('search and the user menu call their handlers', (tester) async {
@@ -503,6 +555,23 @@ void main() {
       expect(find.byKey(const ValueKey('modernDashboard')), findsNothing,
           reason: 'Standard keeps the previous dashboard');
       expect(find.text('Dashboard Overview'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Modern: the support icon opens the support request form directly, on any page', (tester) async {
+      final launcher = _FakeLauncher();
+      UrlLauncherPlatform.instance = launcher;
+      await openDashboard(tester);
+      await tester.tap(find.byKey(const ValueKey('modernSupport')));
+      await settle(tester);
+      expect(launcher.opened, [AppConfig.supportForm]);
+      expect(find.byType(Dialog), findsNothing, reason: 'the form, not the Help & Support dialog');
+      await tester.tap(find.byKey(const ValueKey('modernNav_Customers')));
+      await settle(tester);
+      expect(find.byKey(const ValueKey('modernSupport')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('modernSupport')));
+      await settle(tester);
+      expect(launcher.opened, [AppConfig.supportForm, AppConfig.supportForm]);
       expect(tester.takeException(), isNull);
     });
 

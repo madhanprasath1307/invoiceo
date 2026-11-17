@@ -474,7 +474,10 @@ void main() {
     testWidgets('details, Advanced Options and Charges & Adjustments open and close', (tester) async {
       await open(tester);
       expect(find.text('Invoice Details'), findsOneWidget);
-      expect(find.text('TAX SETTINGS'), findsNothing, reason: 'advanced options start closed');
+      expect(find.text('TAX SETTINGS'), findsOneWidget, reason: 'advanced options start open');
+      await tester.tap(find.byKey(const ValueKey('modernAdvancedOptions')));
+      await tester.pump();
+      expect(find.text('TAX SETTINGS'), findsNothing, reason: 'a tap closes them');
       await tester.tap(find.byKey(const ValueKey('modernAdvancedOptions')));
       await tester.pump();
       expect(find.text('TAX SETTINGS'), findsOneWidget);
@@ -484,6 +487,17 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('modernCharges')));
       await tester.pump();
       expect(find.widgetWithText(TextField, 'Invoice Discount'), findsOneWidget);
+    });
+  });
+
+  group('right panel, narrow window', () {
+    testWidgets('Advanced Options start closed in the stacked layout and a tap opens them', (tester) async {
+      await open(tester, size: const Size(900, 900));
+      expect(find.text('TAX SETTINGS'), findsNothing, reason: 'closed by default when the page is one column');
+      await tester.ensureVisible(find.byKey(const ValueKey('modernAdvancedOptions')));
+      await tester.tap(find.byKey(const ValueKey('modernAdvancedOptions')));
+      await tester.pump();
+      expect(find.text('TAX SETTINGS'), findsOneWidget);
     });
   });
 

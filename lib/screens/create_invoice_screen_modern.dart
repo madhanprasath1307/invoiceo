@@ -80,6 +80,9 @@ class CreateInvoiceScreenModern extends ConsumerStatefulWidget {
   /// document deletes it.
   final String? draftId;
 
+  /// The Payment choice (Partial / Paid) saved with that draft; null = Unpaid.
+  final DraftPayment? draftPayment;
+
   /// The back arrow in the page header (to the list of this document type).
   final VoidCallback? onBack;
 
@@ -94,6 +97,7 @@ class CreateInvoiceScreenModern extends ConsumerStatefulWidget {
     this.onGoToList,
     this.guard,
     this.draftId,
+    this.draftPayment,
     this.onBack,
   });
 
@@ -235,10 +239,15 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
   late String? _convertFromId = widget.convertFromQuotationId;
   late bool _fromClone = widget.cloneFrom != null;
   // Right panel: the "Advanced Options" and "Charges & Adjustments" sections.
-  bool _advancedOpen = false;
+  // Advanced Options: open by default in the wide two-column layout (its right panel scrolls on its own), closed in
+  // the narrow stacked one (open, it would push the items table far down). A tap on its row decides from then on.
+  // Charges & Adjustments stays closed until used.
+  bool? _advancedOpenChoice;
+  bool _wideLayout = true; // set by the page's layout builder
+  bool get _advancedOpen => _advancedOpenChoice ?? _wideLayout;
   bool? _chargesOpen; // null = open only when something is filled in
   // Right panel: the Payment section of a NEW invoice (Unpaid / Partial / Paid). The payment is recorded right after
-  // the invoice is saved. Not kept in drafts.
+  // the invoice is saved. Kept in drafts (Partial / Paid).
   NewInvoicePaymentStatus _payStatus = NewInvoicePaymentStatus.unpaid;
   String _payMethod = kNewInvoiceDefaultPaymentMethod;
   final TextEditingController _payAmountController = TextEditingController();
@@ -246,6 +255,28 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
   NewInvoicePaymentError? _payError;
   bool get _showNewInvoicePayment =>
       _invoice == null && !isEditing && widget.invoiceToEdit == null && invoiceType == 'Invoice';
+
+  /// The Payment choice to keep in a draft: Partial or Paid on an Invoice; null (Unpaid) keeps nothing.
+  DraftPayment? _draftPaymentFromForm() {
+    if (invoiceType != 'Invoice' || _payStatus == NewInvoicePaymentStatus.unpaid) return null;
+    return DraftPayment(
+      status: _payStatus.name,
+      amountText: _payStatus == NewInvoicePaymentStatus.partial ? _payAmountController.text : '',
+      method: _payMethod,
+      notes: _payNotesController.text,
+    );
+  }
+
+  /// Puts a draft's Payment choice back on the form.
+  void _restoreDraftPayment(DraftPayment? p) {
+    if (p == null) return;
+    final status = NewInvoicePaymentStatus.values.where((v) => v.name == p.status).firstOrNull;
+    if (status == null || status == NewInvoicePaymentStatus.unpaid) return;
+    _payStatus = status;
+    _payMethod = kNewInvoicePaymentMethods.contains(p.method) ? p.method : kNewInvoiceDefaultPaymentMethod;
+    _payAmountController.text = status == NewInvoicePaymentStatus.partial ? p.amountText : '';
+    _payNotesController.text = p.notes;
+  }
 
   void _resetNewInvoicePayment() {
     _payStatus = NewInvoicePaymentStatus.unpaid;
@@ -509,7 +540,8 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
       // date stays as today; currentInvoiceNumber is generated in _loadCustomersAndProducts
       if (widget.draftId != null) {
         // A draft comes back exactly as it was saved (a duplicate starts
-        // fresh): its dates, the PDF number and the custom fields too.
+        // fresh): its dates, the PDF number, the custom fields and the Payment choice too.
+        _restoreDraftPayment(widget.draftPayment);
         _selectedOrderDate = src.date;
         _selectedDueDate = src.dueDate;
         _hideInvoiceNumber = src.hideInvoiceNumber;
@@ -1660,7 +1692,10 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
       final repo = ref.read(invoiceDraftRepositoryProvider);
       final id = _draftId ?? repo.newId();
       await repo.saveDraft(InvoiceDraft(
-          id: id, invoice: _invoiceFromForm(id: ''), updatedAt: DateTime.now()));
+          id: id,
+          invoice: _invoiceFromForm(id: ''),
+          updatedAt: DateTime.now(),
+          payment: _draftPaymentFromForm()));
       if (!mounted) return true;
       setState(() => _draftId = id);
       _markFormClean();
@@ -5027,6 +5062,7 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
                 // column instead.
                 const wideBreakpoint = 980.0;
                 final isWide = constraints.maxWidth >= wideBreakpoint;
+                _wideLayout = isWide;
 
                 // Inside the Modern frame the title and date are in the top
                 // bar; shown on its own, the page draws them itself.
@@ -7311,7 +7347,7 @@ class _CreateInvoiceScreenModernState extends ConsumerState<CreateInvoiceScreenM
           child: InkWell(
             key: const ValueKey('modernAdvancedOptions'),
             borderRadius: BorderRadius.circular(10),
-            onTap: () => setState(() => _advancedOpen = !_advancedOpen),
+            onTap: () => setState(() => _advancedOpenChoice = !_advancedOpen),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               child: Row(children: [

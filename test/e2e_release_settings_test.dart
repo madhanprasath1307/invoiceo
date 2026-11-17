@@ -524,8 +524,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Hrs'), findsWidgets, reason: 'quantity column label');
       // Custom fields (under Advanced options): fill "Vehicle No".
-      await tester.ensureVisible(find.byKey(const ValueKey('modernAdvancedOptions')));
-      await tester.tap(find.byKey(const ValueKey('modernAdvancedOptions')));
+      // (Advanced options start open on a new invoice.)
       await settle(tester, rounds: 2);
       expect(find.text(en.customizationCustomFieldsTitle.toUpperCase()), findsOneWidget,
           reason: 'custom fields card');

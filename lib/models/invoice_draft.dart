@@ -8,6 +8,37 @@ import 'package:invoiceo/models/invoice.dart';
 import 'package:invoiceo/models/invoice_item.dart';
 import 'package:invoiceo/models/product.dart';
 
+/// The Payment section of the New Invoice form as it was when a draft was saved (Partial or Paid; Unpaid is
+/// the default and is not stored). [status] is the enum name, [amountText] what was typed in the Partial box.
+class DraftPayment {
+  const DraftPayment({
+    required this.status,
+    this.amountText = '',
+    this.method = 'Cash',
+    this.notes = '',
+  });
+
+  final String status;
+  final String amountText;
+  final String method;
+  final String notes;
+
+  Map<String, dynamic> toJson() =>
+      {'status': status, 'amountText': amountText, 'method': method, 'notes': notes};
+
+  static DraftPayment? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final status = j['status'];
+    if (status is! String) return null;
+    return DraftPayment(
+      status: status,
+      amountText: j['amountText'] as String? ?? '',
+      method: j['method'] as String? ?? 'Cash',
+      notes: j['notes'] as String? ?? '',
+    );
+  }
+}
+
 /// A half-made invoice, quotation or receipt saved with "Save Draft".
 ///
 /// Drafts live in their own table (`invoice_drafts`), not in `invoices`, so
@@ -19,6 +50,7 @@ class InvoiceDraft {
     required this.id,
     required this.invoice,
     required this.updatedAt,
+    this.payment,
   });
 
   final String id;
@@ -27,6 +59,9 @@ class InvoiceDraft {
   /// real ones are given when the document is created.
   final Invoice invoice;
   final DateTime updatedAt;
+
+  /// The Payment section choice (Partial / Paid) made on the form; null = Unpaid.
+  final DraftPayment? payment;
 
   String get type => invoice.type;
   String get customerName => invoice.customer.name;
@@ -39,17 +74,23 @@ class InvoiceDraft {
         'customer_name': invoice.customer.name,
         'total': invoice.total,
         'item_count': invoice.items.length,
-        'data': jsonEncode(invoiceToJson(invoice)),
+        'data': jsonEncode({
+          ...invoiceToJson(invoice),
+          if (payment != null) 'payment': payment!.toJson(),
+        }),
         'updated_at': updatedAt.toIso8601String(),
       };
 
-  factory InvoiceDraft.fromRow(Map<String, Object?> row) => InvoiceDraft(
-        id: row['id'] as String,
-        invoice: invoiceFromJson(
-            jsonDecode(row['data'] as String) as Map<String, dynamic>),
-        updatedAt: DateTime.tryParse(row['updated_at'] as String? ?? '') ??
-            DateTime.now(),
-      );
+  factory InvoiceDraft.fromRow(Map<String, Object?> row) {
+    final data = jsonDecode(row['data'] as String) as Map<String, dynamic>;
+    return InvoiceDraft(
+      id: row['id'] as String,
+      invoice: invoiceFromJson(data),
+      updatedAt: DateTime.tryParse(row['updated_at'] as String? ?? '') ??
+          DateTime.now(),
+      payment: DraftPayment.fromJson(data['payment']),
+    );
+  }
 
   // ── Invoice <-> JSON (everything the create form can set) ────────────────
 

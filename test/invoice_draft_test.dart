@@ -137,4 +137,27 @@ void main() {
     expect(await SqliteInvoiceRepository().peekNextInvoiceNumber('Invoice'), before);
     expect(await InvoiceService.getAllInvoices(), isEmpty);
   });
+
+  test('a draft keeps the Payment section choice; an old draft without one is Unpaid', () async {
+    await InvoiceDraftService.saveDraft(InvoiceDraft(
+        id: 'dp',
+        invoice: sample()..type = 'Invoice',
+        updatedAt: DateTime(2026, 11, 17),
+        payment: const DraftPayment(status: 'partial', amountText: '40', method: 'Check', notes: 'chq 12')));
+    final back = (await InvoiceDraftService.getDraft('dp'))!;
+    expect(back.payment, isNotNull);
+    expect(back.payment!.status, 'partial');
+    expect(back.payment!.amountText, '40');
+    expect(back.payment!.method, 'Check');
+    expect(back.payment!.notes, 'chq 12');
+
+    await InvoiceDraftService.saveDraft(
+        InvoiceDraft(id: 'dq', invoice: sample()..type = 'Invoice', updatedAt: DateTime(2026, 11, 17)));
+    expect((await InvoiceDraftService.getDraft('dq'))!.payment, isNull);
+
+    // a draft saved before this existed (no "payment" in its data) still opens
+    expect(DraftPayment.fromJson(null), isNull);
+    expect(DraftPayment.fromJson({'status': 5}), isNull);
+    expect(DraftPayment.fromJson({'status': 'paid'})!.method, 'Cash');
+  });
 }

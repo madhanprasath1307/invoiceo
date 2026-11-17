@@ -504,7 +504,9 @@ extension ModernCreateType on ModernCreate {
 }
 
 /// What the user menu offers.
-enum ModernUserAction { settings, changePassword, coffee, help, logout }
+/// [support]: the top bar's support icon, which opens the support request form directly; [help] opens the
+/// Help & Support dialog (search the help topics, with the same form behind its Contact Support button).
+enum ModernUserAction { settings, changePassword, coffee, help, support, logout }
 
 /// Top bar: search, the plus button (new invoice / quotation / receipt), the
 /// language picker, and the signed-in user.
@@ -634,6 +636,14 @@ class ModernTopBar extends StatelessWidget {
       children: [
         if (h != null && h.actions.isNotEmpty)
           for (final a in h.actions) ...[a, const SizedBox(width: 4)],
+        // The support request form, one click from every page: the icon only, the name shows on hover.
+        IconButton(
+          key: const ValueKey('modernSupport'),
+          tooltip: l10n.helpContactSupportButton,
+          icon: Icon(Icons.support_agent_outlined, size: 22, color: primary),
+          onPressed: () => onUserAction(ModernUserAction.support),
+        ),
+        const SizedBox(width: 4),
         if (h?.createButton != null) ...[
           const SizedBox(width: 8),
           h!.createButton!,
@@ -662,7 +672,7 @@ class ModernTopBar extends StatelessWidget {
             ),
           ),
         // The language is chosen in Settings (Company Info); Help & Support
-        // is in the sidebar.
+        // is in the sidebar and the support icon in this bar.
         const SizedBox(width: 12),
         PopupMenuButton<ModernUserAction>(
           key: const ValueKey('modernUserMenu'),
